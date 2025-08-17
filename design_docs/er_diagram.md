@@ -1,9 +1,9 @@
 erDiagram
     users ||--o{ tasks : "作成する"
-    users||--o{ task_auth : "持つ"
-    tasks ||--o{ task_auth : "関連付ける"
-    tasks ||--o{ daily_task_plans : "持つ"
+    users||--o{ task_auths : "持つ"
+    tasks ||--o{ task_auths : "関連付ける"
     tasks ||--o{ subtasks : "持つ"
+    tasks ||--o{ daily_work_plans : "持つ"
     tasks ||--o{ daily_time_plans : "持つ"
     subtasks ||--o{ record_works : "記録する"
 
@@ -18,11 +18,11 @@ erDiagram
         timestamp updated_at
     }
     
-    task_auth {
+    task_auths {
         int task_auth_id PK
         int task_id FK
         int user_id FK "ユーザ毎にタスクの権限持つ"
-        varchar group_auth "read/write/admin"
+        varchar task_user_auth "read/write/admin"
         int last_updated_user FK
         timestamp created_at
         timestamp updated_at
@@ -72,18 +72,18 @@ erDiagram
         int daily_time_plan_id PK
         int task_id FK
         int created_by FK
-        timestamp datetime "日時に対応"
+        date target_date "カレンダー連携必要無いのでdate"
         int time_plan_value "整数値で計算簡単に"
         int last_updated_user FK
         timestamp created_at
         timestamp updated_at
     }
     
-    daily_task_plans {
-        int daily_task_plan_id PK
+    daily_work_plans {
+        int daily_work_plan_id PK
         int task_id FK
         int created_by FK
-        timestamp datetime "日時に対応"
+        date target_date "カレンダー連携必要無いのでdate"
         int task_plan_value "整数値で計算簡単に"
         int last_updated_user FK
         timestamp created_at
