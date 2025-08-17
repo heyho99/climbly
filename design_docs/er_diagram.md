@@ -3,8 +3,8 @@ erDiagram
     users||--o{ task_auths : "持つ"
     tasks ||--o{ task_auths : "関連付ける"
     tasks ||--o{ subtasks : "持つ"
-    tasks ||--o{ daily_work_plans : "持つ"
-    tasks ||--o{ daily_time_plans : "持つ"
+    tasks ||--o{ daily_work_plans : "日毎の作業予定"
+    tasks ||--o{ daily_time_plans : "日毎の時間予定"
     subtasks ||--o{ record_works : "記録する"
 
     users {
@@ -59,9 +59,10 @@ erDiagram
         int record_work_id PK
         int subtask_id FK
         int created_by FK "実績入力した人"
-        timestamp worked_at "日時に対応"
-        int completion_rate "サブタスク完了率"
-        int work_time "作業時間（分など）"
+        timestamp start_at "日時に対応"
+        timestamp end_at "日時に対応"
+        int progress_value "進捗値(0-100)"
+        int work_time "作業時間を別に設定できるようにする"
         text note "作業メモ"
         int last_updated_user FK
         timestamp created_at
