@@ -1,0 +1,45 @@
+# docker-compose up -d --build <service名(複数選択可)>
+
+# --build：contextで指定されたディレクトリ(Dockerfile,nginx.conf,ソースコード)を取り込み、イメージを作成
+# -d：デタッチド(バックグラウンド)で起動
+
+version: "3.9"
+
+services:
+  front:
+    build:
+      context: ./frontend # frontend/からイメージを作成
+    image: climbly/front:dev # 参照するイメージ名はclimbly/front:devという名前(タグ)で、無ければ新規作成
+    container_name: climbly-front # コンテナ名は自動命名せず明示的に指定
+    ports:
+      - "8080:80"   # dev(8080:80) per service_nw.md
+    restart: unless-stopped # コンテナが落ちた場合に自動再起動、ユーザーが明示停止した場合は再起動しない
+    # BFF へは Nginx から http://bff:80/bff/ でプロキシします
+    # BFF サービスを同一 compose 内に追加したら、同一ネットワークで名前解決されます
+    networks:
+      - climbly-net
+
+  # bff:
+  #   build:
+  #     context: ./bff
+  #   image: climbly/bff:dev
+  #   container_name: climbly-bff
+  #   ports:
+  #     - "8081:80"  # dev(8081:80)
+  #   restart: unless-stopped
+  #   networks:
+  #     - climbly-net
+
+  # task-service:
+  #   # TODO: 実装後に追加。dev(8082:80)
+  # user-service:
+  #   # TODO: 実装後に追加。dev(8083:80)
+  # record-service:
+  #   # TODO: 実装後に追加。dev(8084:80)
+  # subtask-service:
+  #   # TODO: 実装後に追加。dev(8085:80)
+
+networks:
+  climbly-net:
+    name: climbly-net
+    driver: bridge
