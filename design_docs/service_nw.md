@@ -9,20 +9,21 @@ graph TD
     end    
     subgraph task-service [タスクサービス]
 	    Task-port["task-service:80<br/>dev(8082:80)"]
-    end
+    end   
     subgraph user-service [ユーザー・権限サービス]
 	    User-port["user-service:80<br/>dev(8083:80)"]
     end
     subgraph record-service [実績記録サービス]
 	    Record-port["record-service:80<br/>dev(8084:80)"]
     end
-    
+    subgraph subtask-service [サブタスクサービス]
+	    Subtask-port["subtask-service:80<br/>dev(8085:80)"]
+    end 
+        
     subgraph task-db [タスクDB]
 	    task-db-port["task-db:5432<br/>dev(5502:5432)"]
         tasks
-        subtasks
-        daily_work_plans
-        daily_time_plans
+        daily_plans
     end
     subgraph user-db [ユーザ・権限DB]
 	    user-db-port["user-db:5432<br/>dev(5501:5432)"]
@@ -33,7 +34,10 @@ graph TD
 	    record-db-port["record-db:5432<br/>dev(5503:5432)"]
         record_works
     end
-
+    subgraph subtask-db [サブタスクDB]
+	    subtask-db-port["task-db:5432<br/>dev(5504:5432)"]
+        subtasks
+    end
              
     Client <--> Front-port
     Front-port <--> BFF-port
@@ -41,12 +45,11 @@ graph TD
     BFF-port <--> User-port
     BFF-port <--> Task-port
     BFF-port <--> Record-port
+    BFF-port <--> Subtask-port
     
     task-service <--> task-db-port
     task-db-port <--> tasks
-    task-db-port <--> subtasks
-    task-db-port <--> daily_work_plans
-    task-db-port <--> daily_time_plans
+    task-db-port <--> daily_plans
     
     user-service <--> user-db-port
     user-db-port <--> users
@@ -54,3 +57,7 @@ graph TD
     
     record-service <--> record-db-port
     record-db-port <--> record_works
+    
+    subtask-service <--> subtask-db-port
+    subtask-db-port <--> subtasks
+    

@@ -2,10 +2,9 @@ erDiagram
     users ||--o{ tasks : "作成する"
     users||--o{ task_auths : "持つ"
     tasks ||--o{ task_auths : "関連付ける"
+    tasks ||--o{ daily_plans : "日毎の作業予定"
+    tasks ||--o{ record_works : "記録する"
     tasks ||--o{ subtasks : "持つ"
-    tasks ||--o{ daily_work_plans : "日毎の作業予定"
-    tasks ||--o{ daily_time_plans : "日毎の時間予定"
-    subtasks ||--o{ record_works : "記録する"
 
     users {
         int user_id PK
@@ -43,24 +42,12 @@ erDiagram
         timestamp updated_at
     }
     
-    subtasks {
-        int subtask_id PK
-        int task_id FK
-        int created_by FK "user_id"
-        varchar subtask_name
-        int contribution_value
-        text comment
-        int last_updated_user FK
-        timestamp created_at
-        timestamp updated_at
-    }
-    
     record_works {
         int record_work_id PK
-        int subtask_id FK
+        int task_id FK
         int created_by FK "実績入力した人"
-        timestamp start_at "日時に対応"
-        timestamp end_at "日時に対応"
+        timestamp start_at "日時に対応(日をまたぐ場合は別々に作成)"
+        timestamp end_at "日時に対応(日をまたぐ場合は別々に作成)"
         int progress_value "進捗値(0-100)"
         int work_time "作業時間を別に設定できるようにする"
         text note "作業メモ"
@@ -69,24 +56,29 @@ erDiagram
         timestamp updated_at
     }
     
-    daily_time_plans {
+    daily_plans {
         int daily_time_plan_id PK
         int task_id FK
         int created_by FK
         date target_date "カレンダー連携必要無いのでdate"
+        int work_plan_value "整数値で計算簡単に"
         int time_plan_value "整数値で計算簡単に"
         int last_updated_user FK
         timestamp created_at
         timestamp updated_at
     }
     
-    daily_work_plans {
-        int daily_work_plan_id PK
+    subtasks {
+        int subtask_id PK
         int task_id FK
-        int created_by FK
-        date target_date "カレンダー連携必要無いのでdate"
-        int task_plan_value "整数値で計算簡単に"
+        int created_by FK "user_id"
+        varchar subtask_name
+        text subtask_content
+        varchar status "to Do/Doing/Done"
+        timestamp start_at
+        timestamp end_at
+        text comment
         int last_updated_user FK
         timestamp created_at
         timestamp updated_at
-    }
+    }    
