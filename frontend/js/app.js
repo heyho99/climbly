@@ -37,22 +37,27 @@ function renderNav() {
   }
 }
 
+// ガード：画面遷移直前に実行されるログイン判定
 function guard(path) {
   const authed = !!getToken();
-  if (!authed && path !== '/login') {
-    navigateTo('/login');
+  if (!authed && path !== '/login') {  // 未認証かつログインページ以外
+    navigateTo('/login'); // ログインページへ
     return false;
   }
-  if (authed && path === '/login') {
-    navigateTo('/dashboard');
+  if (authed && path === '/login') {  // 認証済みかつログインページ
+    navigateTo('/dashboard'); // ダッシュボードへ
     return false;
   }
   return true;
 }
 
+
+// ---実行部分---
+
+// hashchangeのイベントリスナーを作成
 initRouter({ routes, beforeEach: guard, onRender: renderNav });
 
 // 初回遷移
-if (!location.hash) {
+if (!location.hash) { // URLの#以降の部分が空なら（つまりhttp://localhost:8080/）
   navigateTo('/login');
 }

@@ -20,6 +20,7 @@ let routerConfig = { routes: {}, beforeEach: null, onRender: null };
 
 export function initRouter(config) {
   routerConfig = config;
+  // hashchange：https://index.html#a → https://index.html#b のようなhashの変更
   window.addEventListener('hashchange', handleRoute);
   handleRoute();
 }
@@ -27,6 +28,9 @@ export function initRouter(config) {
 export function navigateTo(path) { location.hash = '#' + path; }
 
 async function handleRoute() {
+  // location：window.locationのことで、URLやサーバといった"位置"を表す
+  // location.hash：URLの#以降の部分を表す  http://localhost:8080/#/login → location.hash = "#/login"
+  // #/dashboardならdashboardに、評価結果がfalsy(空文字など)なら/loginに
   const path = location.hash.replace(/^#/, '') || '/login';
   if (routerConfig.beforeEach && !routerConfig.beforeEach(path)) return;
 
