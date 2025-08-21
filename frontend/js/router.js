@@ -1,3 +1,4 @@
+// index.htmlのメイン部分DOMを指す
 const appRoot = () => document.getElementById('app-root');
 
 function parseRoute(pathname) {

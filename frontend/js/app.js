@@ -6,6 +6,7 @@ import { TasksView } from './views/tasks.js';
 import { TaskFormView } from './views/task_form.js';
 import { RecordsView } from './views/records.js';
 
+// SPAのルーターは、javascriptファイルをルートする
 const routes = {
   '/login': LoginView,
   '/dashboard': DashboardView,
@@ -54,6 +55,7 @@ function guard(path) {
 
 // ---実行部分---
 
+// ルーターを初期化
 // hashchangeのイベントリスナーを作成
 initRouter({ routes, beforeEach: guard, onRender: renderNav });
 
