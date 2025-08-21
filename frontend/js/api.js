@@ -48,4 +48,4 @@ export const api = {
   async deleteRecord(id) { return request(`/records/${id}`, { method:'DELETE' }); },
 };
 
-export { setToken, getToken, clearToken };
+// duplicate re-export removed; functions are already exported above

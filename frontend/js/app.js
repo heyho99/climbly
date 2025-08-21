@@ -6,15 +6,6 @@ import { TasksView } from './views/tasks.js';
 import { TaskFormView } from './views/task_form.js';
 import { RecordsView } from './views/records.js';
 
-// SPAのルーターは、javascriptファイルをルートする
-const routes = {
-  '/login': LoginView,
-  '/dashboard': DashboardView,
-  '/tasks': TasksView,
-  '/tasks/new': (params) => TaskFormView({ mode: 'create', ...params }),
-  '/tasks/:id': (params) => TaskFormView({ mode: 'edit', ...params }),
-  '/records': RecordsView,
-};
 
 function renderNav() {
   const nav = document.getElementById('app-nav');
@@ -41,25 +32,40 @@ function renderNav() {
 // ガード：画面遷移直前に実行されるログイン判定
 function guard(path) {
   const authed = !!getToken();
-  if (!authed && path !== '/login') {  // 未認証かつログインページ以外
-    navigateTo('/login'); // ログインページへ
+  // 未認証でログインページ以外にアクセスしたら、ログインページへリダイレクト
+  if (!authed && path !== '/login') {  
+    navigateTo('/login');
     return false;
   }
-  if (authed && path === '/login') {  // 認証済みかつログインページ
-    navigateTo('/dashboard'); // ダッシュボードへ
+  // 認証済みでログインページにアクセスしたら、ダッシュボードへリダイレクト
+  if (authed && path === '/login') {  
+    navigateTo('/dashboard');
     return false;
   }
   return true;
 }
 
 
+
 // ---実行部分---
 
-// ルーターを初期化
+// SPAのルーターは、javascriptファイルをルートする
+// ビューのルーティングの対応表（ルート定義）
+const routes = {
+  '/login': LoginView,
+  '/dashboard': DashboardView,
+  '/tasks': TasksView,
+  '/tasks/new': (params) => TaskFormView({ mode: 'create', ...params }),
+  '/tasks/:id': (params) => TaskFormView({ mode: 'edit', ...params }),
+  '/records': RecordsView,
+};
+
+// ルーターを初期化（ルーター設定の反映、hashchangeイベントリスナーの作成、）
 // hashchangeのイベントリスナーを作成
+// { ルート定義, 毎回の遷移前に実行される関数, 遷移後に実行される関数 }
 initRouter({ routes, beforeEach: guard, onRender: renderNav });
 
-// 初回遷移
-if (!location.hash) { // URLの#以降の部分が空なら（つまりhttp://localhost:8080/）
+// location.hashが空なら/loginに遷移
+if (!location.hash) {
   navigateTo('/login');
 }

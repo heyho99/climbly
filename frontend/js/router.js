@@ -17,8 +17,11 @@ function parseRoute(pathname) {
   return { pattern: pathname, params: {} };
 }
 
+// { ルート定義, 毎回の遷移前に実行される関数, 遷移後に実行される関数 }
 let routerConfig = { routes: {}, beforeEach: null, onRender: null };
 
+// ルーターを初期化する関数
+// ルーターの設定、ハッシュ変更のイベントリスナーを設定、初回遷移を実行
 export function initRouter(config) {
   routerConfig = config;
   // hashchange：https://index.html#a → https://index.html#b のようなhashの変更
@@ -26,13 +29,17 @@ export function initRouter(config) {
   handleRoute();
 }
 
+// location.hash（locationはwindow.locationのこと）を変更する関数
+// location.hashの例... http://localhost:8080/#/login → location.hash = "#/login"
 export function navigateTo(path) { location.hash = '#' + path; }
 
+
+// 現在のURLハッシュに応じて表示画面を切り替える関数（中核処理）
 async function handleRoute() {
-  // location：window.locationのことで、URLやサーバといった"位置"を表す
-  // location.hash：URLの#以降の部分を表す  http://localhost:8080/#/login → location.hash = "#/login"
-  // #/dashboardならdashboardに、評価結果がfalsy(空文字など)なら/loginに
-  const path = location.hash.replace(/^#/, '') || '/login';
+  // #/loginを/loginに変換
+  const path = location.hash.replace(/^#/, '');
+  // 左辺：beforeEach（ガード関数）が定義されていれば、右辺を評価
+  // 右辺：beforeEach(path)がfalse、つまり不正なアクセスなら、遷移を中止
   if (routerConfig.beforeEach && !routerConfig.beforeEach(path)) return;
 
   const { pattern, params } = parseRoute(path);
