@@ -1,3 +1,5 @@
+// ログイン認証の関数を定義
+
 import { api, setToken, getToken, clearToken } from './api.js';
 
 export async function login(username_or_email, password) {

@@ -1,3 +1,5 @@
+// frontendの、BFFへのAPI呼び出しの関数を定義
+
 const API_BASE = (window.BFF_BASE_URL ?? '') + '/bff/v1';
 
 let token = localStorage.getItem('climbly_token') || '';

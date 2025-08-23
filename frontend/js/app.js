@@ -29,9 +29,9 @@ function renderNav() {
   }
 }
 
-// ガード：画面遷移直前に実行されるログイン判定
+// ガード：画面遷移直前に実行されるログイン判定（ログイン有無はトークンで判断）
 function guard(path) {
-  const authed = !!getToken();
+  const authed = !!getToken(); // !!で値をboolに変換
   // 未認証でログインページ以外にアクセスしたら、ログインページへリダイレクト
   if (!authed && path !== '/login') {  
     navigateTo('/login');
