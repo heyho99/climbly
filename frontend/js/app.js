@@ -1,5 +1,5 @@
 import { initRouter, navigateTo } from './router.js';
-import { api, setToken, getToken, clearToken } from './api.js';
+import { getToken, clearToken } from './token.js';
 import { LoginView } from './views/login.js';
 import { DashboardView } from './views/dashboard.js';
 import { TasksView } from './views/tasks.js';

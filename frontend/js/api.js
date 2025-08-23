@@ -1,14 +1,13 @@
-// frontendの、BFFへのAPI呼び出しの関数を定義
+// frontendからの、BFFへのAPI呼び出しの関数を定義
+
+import { getToken } from './token.js';
 
 const API_BASE = (window.BFF_BASE_URL ?? '') + '/bff/v1';
 
-let token = localStorage.getItem('climbly_token') || '';
-export function setToken(t) { token = t; localStorage.setItem('climbly_token', t); }
-export function getToken() { return token; }
-export function clearToken() { token = ''; localStorage.removeItem('climbly_token'); }
-
+// apiにリクエストを送る関数を定義
 async function request(path, { method='GET', body, headers={} } = {}) {
   const h = { 'Content-Type': 'application/json', ...headers };
+  const token = getToken();
   if (token) h['Authorization'] = `Bearer ${token}`;
   const res = await fetch(API_BASE + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) {
@@ -20,6 +19,8 @@ async function request(path, { method='GET', body, headers={} } = {}) {
   return res.json();
 }
 
+
+// BFFへのAPI呼び出しの関数をまとめた、apiオブジェクトを定義（中核）
 export const api = {
   // Auth
   async login({ username_or_email, password }) { return request('/auth/login', { method:'POST', body:{ username_or_email, password } }); },
