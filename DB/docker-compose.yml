@@ -2,7 +2,10 @@
 # 起動例: docker-compose -f DB/docker-compose.yml up -d
 # docker-compose -f DB/docker-compose.yml up -d user-db task-db
 
-# PGPASSWORD=climbly psql -h 127.0.0.1 -p 5501 -U climbly -d record_db -f DB/init/record/001_schema.sql
+# init.sqlを実行したいとき、volumeを削除する必要がある
+# docker volume ls  ->  docker volume rm <volume名>
+
+# PGPASSWORD=climbly psql -h 127.0.0.1 -p 5501 -U climbly -d user_db -f DB/init/user/001_schema.sql
 # -h：ホスト名
 # -p：ポート番号
 # -U：ユーザー名
@@ -23,8 +26,9 @@ services:
     ports:
       - "5501:5432"
     volumes:
-      # user-db-dataを下記volumesでホストに作成し、それをマウント（ホストに./user-db-dataがあっても無視される）
+      # user-db-data（DBのデータディレクトリ）を下記volumesでホストに作成し、それをマウント（ホストに./user-db-dataがあっても無視される）
       - user-db-data:/var/lib/postgresql/data
+      # /docker-entrypoint-initdb.d 配下のスクリプトは、データディレクトリが空の初回起動時」に限り、自動実行される
       - ./init/user:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     networks:

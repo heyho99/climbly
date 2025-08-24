@@ -12,9 +12,9 @@ erDiagram
         varchar password
         varchar email "ログイン通知やパスワードリセット用"
         boolean is_active "無効化フラグ"
-        timestamp last_login_at
-        timestamp created_at
-        timestamp updated_at
+        timestamptz last_login_at
+        timestamptz created_at
+        timestamptz updated_at
     }
     
     task_auths {
@@ -23,8 +23,8 @@ erDiagram
         int user_id FK "ユーザ毎にタスクの権限持つ"
         varchar task_user_auth "read/write/admin"
         int last_updated_user FK
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }
     
     tasks {
@@ -32,28 +32,28 @@ erDiagram
         int created_by FK "user_id"
         varchar task_name
         text task_content
-        timestamp start_at "日時に対応"
-        timestamp end_at "日時に対応"
+        timestamptz start_at "日時に対応"
+        timestamptz end_at "日時に対応"
         varchar category "study/creation/other"
         int target_time
         text comment
         int last_updated_user FK
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }
     
     record_works {
         int record_work_id PK
         int task_id FK
         int created_by FK "実績入力した人"
-        timestamp start_at "日時に対応(日をまたぐ場合は別々に作成)"
-        timestamp end_at "日時に対応(日をまたぐ場合は別々に作成)"
+        timestamptz start_at "日時に対応(日をまたぐ場合は別々に作成)"
+        timestamptz end_at "日時に対応(日をまたぐ場合は別々に作成)"
         int progress_value "進捗値(0-100)"
         int work_time "作業時間を別に設定できるようにする"
         text note "作業メモ"
         int last_updated_user FK
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }
     
     daily_plans {
@@ -64,8 +64,8 @@ erDiagram
         int work_plan_value "整数値で計算簡単に"
         int time_plan_value "整数値で計算簡単に"
         int last_updated_user FK
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }
     
     subtasks {
@@ -75,10 +75,10 @@ erDiagram
         varchar subtask_name
         text subtask_content
         varchar status "to Do/Doing/Done"
-        timestamp start_at
-        timestamp end_at
+        timestamptz start_at
+        timestamptz end_at
         text comment
         int last_updated_user FK
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }    

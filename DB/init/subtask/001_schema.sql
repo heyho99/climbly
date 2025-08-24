@@ -6,10 +6,10 @@ CREATE TABLE IF NOT EXISTS subtasks (
   subtask_name VARCHAR(255) NOT NULL,
   subtask_content TEXT NULL,
   status VARCHAR(16) NOT NULL,
-  start_at TIMESTAMP NULL,
-  end_at TIMESTAMP NULL,
+  start_at TIMESTAMPTZ NULL,
+  end_at TIMESTAMPTZ NULL,
   comment TEXT NULL,
   last_updated_user INTEGER NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
