@@ -26,16 +26,16 @@ services:
     networks:
       - climbly-net
 
-  # bff:
-  #   build:
-  #     context: ./bff
-  #   image: climbly/bff:dev
-  #   container_name: climbly-bff
-  #   ports:
-  #     - "8081:80"  # dev(8081:80)
-  #   restart: unless-stopped
-  #   networks:
-  #     - climbly-net
+  bff:
+    build:
+      context: ./bff
+    image: climbly/bff:dev
+    container_name: climbly-bff
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    networks:
+      - climbly-net
 
   # task-service:
   #   # TODO: 実装後に追加。dev(8082:80)

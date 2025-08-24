@@ -1,9 +1,10 @@
 import { api } from '../api.js';
 
 export async function DashboardView() {
-  let summary = null; let laggards = [];
-  try { summary = await api.dashboardSummary(); } catch {}
-  try { laggards = await api.laggingTasks(); } catch {}
+  let summary = null; 
+  let laggards = [];
+  try { summary = await api.dashboardSummary(); } catch {} // bffの/dashboard/summary
+  try { laggards = await api.laggingTasks(); } catch {} // bffの/dashboard/lagging_tasks
 
   return `
   <div class="row">
