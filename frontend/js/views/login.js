@@ -37,8 +37,12 @@ document.addEventListener('submit', async (e) => {
   }
 });
 
+
+// e.target：イベントが発火したDOM要素（一番内側の）
+// documentはindex.htmlを指すので、if文でtargetを指定してあげれば、再バインドせずにそれぞれのDOMにイベントリスナーを作成できる
 document.addEventListener('click', (e) => {
   if (e.target && e.target.id === 'goto-demo') {
+    console.log('goto-demo clicked');
     e.preventDefault();
     // 簡易デモ: 既知のダミー資格情報を試す or ダッシュボードへ遷移（トークン無し）
     navigateTo('/dashboard');

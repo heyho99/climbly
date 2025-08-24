@@ -15,8 +15,14 @@ services:
     ports:
       - "8080:80"   # dev(8080:80) per service_nw.md
     restart: unless-stopped # コンテナが落ちた場合に自動再起動、ユーザーが明示停止した場合は再起動しない
+    
+    # 静的ファイルは「ボリュームマウント」すれば即反映（Nginxはファイルを都度読む）
+    # nginx.confはreloadで反映
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    
     # BFF へは Nginx から http://bff:80/bff/ でプロキシします
-    # BFF サービスを同一 compose 内に追加したら、同一ネットワークで名前解決されます
     networks:
       - climbly-net
 

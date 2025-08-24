@@ -1,6 +1,30 @@
 // index.htmlのメイン部分DOMを指す
 const appRoot = () => document.getElementById('app-root');
 
+
+// { ルート定義, 毎回の遷移前に実行される関数, 遷移後に実行される関数 }
+let routerConfig = { routes: {}, beforeEach: null, onRender: null };
+
+// ルーターを初期化する関数
+// ルーターの設定、ハッシュ変更のイベントリスナーを設定、初回遷移を実行
+export function initRouter(config) {
+  routerConfig = config;
+  // hashchange：https://index.html#a → https://index.html#b のようなhashの変更
+  window.addEventListener('hashchange', handleRoute);
+  handleRoute();
+}
+
+// location.hash（locationはwindow.locationのこと）を変更する関数
+// location.hashの例... http://localhost:8080/#/login → location.hash = "#/login"
+export function navigateTo(path) { 
+  console.log('navigateTo', path);
+  location.hash = '#' + path; 
+}
+
+
+
+// ---内部関数---
+
 function parseRoute(pathname) {
   // ルートパラメータ簡易対応 /tasks/:id
   const routes = Object.keys(routerConfig.routes);
@@ -17,25 +41,9 @@ function parseRoute(pathname) {
   return { pattern: pathname, params: {} };
 }
 
-// { ルート定義, 毎回の遷移前に実行される関数, 遷移後に実行される関数 }
-let routerConfig = { routes: {}, beforeEach: null, onRender: null };
-
-// ルーターを初期化する関数
-// ルーターの設定、ハッシュ変更のイベントリスナーを設定、初回遷移を実行
-export function initRouter(config) {
-  routerConfig = config;
-  // hashchange：https://index.html#a → https://index.html#b のようなhashの変更
-  window.addEventListener('hashchange', handleRoute);
-  handleRoute();
-}
-
-// location.hash（locationはwindow.locationのこと）を変更する関数
-// location.hashの例... http://localhost:8080/#/login → location.hash = "#/login"
-export function navigateTo(path) { location.hash = '#' + path; }
-
-
 // 現在のURLハッシュに応じて表示画面を切り替える関数（中核処理）
 async function handleRoute() {
+  console.log('hashchangeを検知し、handleRouteを実行')
   // #/loginを/loginに変換
   const path = location.hash.replace(/^#/, '');
   // 左辺：beforeEach（ガード関数）が定義されていれば、右辺を評価
