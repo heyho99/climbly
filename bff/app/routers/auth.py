@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, EmailStr
+import httpx
 
 router = APIRouter(tags=["auth"])
 
@@ -11,30 +12,44 @@ class LoginReq(BaseModel):
 
 class RegisterReq(BaseModel):
     username: str
-    email: str
+    email: EmailStr
     password: str
+
+
+USER_SVC_BASE = "http://user-service/v1"
 
 
 @router.post("/auth/login")
 def login(req: LoginReq):
-    # TODO: user-serviceへ委譲
-    if not req.username_or_email or not req.password:
-        raise HTTPException(status_code=400, detail={"message": "invalid credentials"})
-    return {
-        "token": "demo-token",
-        "user": {"user_id": 1, "username": "demo", "email": "demo@example.com"},
-    }
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(f"{USER_SVC_BASE}/auth/login", json=req.model_dump())
+        if resp.is_success:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
 
 
 @router.post("/auth/register")
 def register(req: RegisterReq):
-    # TODO: user-serviceへ委譲
-    return {
-        "token": "demo-token",
-        "user": {"user_id": 1, "username": req.username, "email": req.email},
-    }
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(f"{USER_SVC_BASE}/auth/register", json=req.model_dump())
+        if resp.is_success:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
 
 
 @router.post("/auth/logout")
 def logout():
-    return {"ok": True}
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.post(f"{USER_SVC_BASE}/auth/logout")
+        if resp.is_success:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})

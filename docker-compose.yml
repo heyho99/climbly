@@ -7,6 +7,7 @@
 version: "3.9"
 
 services:
+
   front:
     build:
       context: ./frontend # frontend/からイメージを作成
@@ -26,6 +27,7 @@ services:
     networks:
       - climbly-net
 
+
   bff:
     build:
       context: ./bff
@@ -37,14 +39,34 @@ services:
     networks:
       - climbly-net
 
+
+  user-service:
+    build:
+      context: ./user-service
+    image: climbly/user-service:dev
+    container_name: climbly-user-service
+    environment: # 環境変数
+      - JWT_SECRET=dev-secret
+      - JWT_EXPIRE_DAYS=7
+      - DB_HOST=climbly-user-db
+      - DB_PORT=5432
+      - DB_NAME=user_db
+      - DB_USER=climbly
+      - DB_PASSWORD=climbly
+    ports:
+      - "8083:80" # dev(8083:80)
+    restart: unless-stopped
+    networks:
+      - climbly-net
+
+
   # task-service:
   #   # TODO: 実装後に追加。dev(8082:80)
-  # user-service:
-  #   # TODO: 実装後に追加。dev(8083:80)
   # record-service:
   #   # TODO: 実装後に追加。dev(8084:80)
   # subtask-service:
   #   # TODO: 実装後に追加。dev(8085:80)
+
 
 networks:
   climbly-net:
