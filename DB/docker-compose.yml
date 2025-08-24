@@ -1,0 +1,95 @@
+# DB専用 compose（複数DBを1つのcomposeで管理）
+# 起動例: docker-compose -f DB/docker-compose.yml up -d
+# docker-compose -f DB/docker-compose.yml up -d user-db task-db
+
+# PGPASSWORD=climbly psql -h 127.0.0.1 -p 5501 -U climbly -d record_db -f DB/init/record/001_schema.sql
+# -h：ホスト名
+# -p：ポート番号
+# -U：ユーザー名
+# -d：データベース名
+# -f：SQLファイル
+
+version: "3.9"
+
+services:
+  # user-service 用 DB
+  user-db:
+    image: postgres:16
+    container_name: climbly-user-db
+    environment:
+      - POSTGRES_USER=climbly
+      - POSTGRES_PASSWORD=climbly
+      - POSTGRES_DB=user_db
+    ports:
+      - "5501:5432"
+    volumes:
+      # user-db-dataを下記volumesでホストに作成し、それをマウント（ホストに./user-db-dataがあっても無視される）
+      - user-db-data:/var/lib/postgresql/data
+      - ./init/user:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - climbly-net
+
+  # task-service 用 DB
+  task-db:
+    image: postgres:16
+    container_name: climbly-task-db
+    environment:
+      - POSTGRES_USER=climbly
+      - POSTGRES_PASSWORD=climbly
+      - POSTGRES_DB=task_db
+    ports:
+      - "5502:5432"
+    volumes:
+      - task-db-data:/var/lib/postgresql/data
+      - ./init/task:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - climbly-net
+
+  # record-service 用 DB
+  record-db:
+    image: postgres:16
+    container_name: climbly-record-db
+    environment:
+      - POSTGRES_USER=climbly
+      - POSTGRES_PASSWORD=climbly
+      - POSTGRES_DB=record_db
+    ports:
+      - "5503:5432"
+    volumes:
+      - record-db-data:/var/lib/postgresql/data
+      - ./init/record:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - climbly-net
+
+  # subtask-service 用 DB（v2以降）
+  subtask-db:
+    image: postgres:16
+    container_name: climbly-subtask-db
+    environment:
+      - POSTGRES_USER=climbly
+      - POSTGRES_PASSWORD=climbly
+      - POSTGRES_DB=subtask_db
+    ports:
+      - "5504:5432"
+    volumes:
+      - subtask-db-data:/var/lib/postgresql/data
+      - ./init/subtask:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+    networks:
+      - climbly-net
+
+# 既存のネットワークを使うだけでも、networksプロパティは必要
+networks:
+  climbly-net:
+    name: climbly-net
+    driver: bridge
+    external: true # 既に存在するNWに参加するだけ
+
+volumes:
+  user-db-data:
+  task-db-data:
+  record-db-data:
+  subtask-db-data:
