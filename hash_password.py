@@ -4,13 +4,13 @@ Utility to generate and verify password hashes compatible with user-service.
 
 Usage examples:
   # Generate hash interactively (password prompt)
-  python tools/hash_password.py
+  python hash_password.py
 
   # Generate hash from CLI arg (beware of shell history)
-  python tools/hash_password.py --password dev
+  python hash_password.py --password dev
 
   # Verify password against an existing hash
-  python tools/hash_password.py --verify --password dev --hash "$2b$12$...."
+  python hash_password.py --verify --password dev --hash "$2b$12$...."
 """
 from __future__ import annotations
 import argparse
