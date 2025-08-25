@@ -1,0 +1,314 @@
+import os
+from datetime import datetime, timedelta, timezone, date
+from typing import List, Optional
+
+from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
+import psycopg
+
+from app.schemas import TaskIn, TaskOut, TaskUpdate, DailyPlanOut, DailyPlanBulkItem
+
+# JWT 設定（user-service と同一シークレット/アルゴリズム）
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+JWT_ALG = "HS256"
+JWT_EXPIRE_DAYS = int(os.getenv("JWT_EXPIRE_DAYS", "7"))
+
+# DB 設定（task-db）
+DB_HOST = os.getenv("DB_HOST", "climbly-task-db")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+DB_NAME = os.getenv("DB_NAME", "task_db")
+DB_USER = os.getenv("DB_USER", "climbly")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "climbly")
+
+auth_scheme = HTTPBearer(auto_error=False)
+
+app = FastAPI(title="Climbly Task Service", version="1.0.0")
+
+
+def get_conn():
+    return psycopg.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        autocommit=True,
+    )
+
+
+def decode_token(token: str) -> int:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        sub = payload.get("sub")
+        if sub is None:
+            raise HTTPException(status_code=401, detail={"message": "invalid token"})
+        return int(sub)
+    except JWTError:
+        raise HTTPException(status_code=401, detail={"message": "invalid token"})
+
+
+async def get_current_user_id(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(auth_scheme),
+) -> int:
+    if creds is None or creds.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail={"message": "missing bearer token"})
+    return decode_token(creds.credentials)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+# Tasks
+@app.get("/v1/tasks", response_model=List[TaskOut])
+def list_tasks(
+    mine: bool = Query(default=True),
+    category: Optional[str] = Query(default=None),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    query = (
+        "SELECT task_id, created_by, task_name, task_content, start_at, end_at, "
+        "category, target_time, comment, created_at, updated_at FROM tasks"
+    )
+    params: List = []
+    where = []
+    if mine:
+        where.append("created_by=%s")
+        params.append(current_user_id)
+    if category is not None:
+        where.append("category=%s")
+        params.append(category)
+    if where:
+        query += " WHERE " + " AND ".join(where)
+    query += " ORDER BY task_id DESC"
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            return [
+                TaskOut(
+                    task_id=r[0],
+                    created_by=r[1],
+                    task_name=r[2],
+                    task_content=r[3],
+                    start_at=r[4],
+                    end_at=r[5],
+                    category=r[6],
+                    target_time=r[7],
+                    comment=r[8],
+                    created_at=r[9],
+                    updated_at=r[10],
+                )
+                for r in rows
+            ]
+
+
+@app.post("/v1/tasks", response_model=TaskOut)
+def create_task(req: TaskIn, current_user_id: int = Depends(get_current_user_id)):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                (
+                    "INSERT INTO tasks (created_by, task_name, task_content, start_at, end_at, category, target_time, comment) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "RETURNING task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, created_at, updated_at"
+                ),
+                (
+                    current_user_id,
+                    req.task_name,
+                    req.task_content,
+                    req.start_at,
+                    req.end_at,
+                    req.category,
+                    req.target_time,
+                    req.comment,
+                ),
+            )
+            r = cur.fetchone()
+            return TaskOut(
+                task_id=r[0],
+                created_by=r[1],
+                task_name=r[2],
+                task_content=r[3],
+                start_at=r[4],
+                end_at=r[5],
+                category=r[6],
+                target_time=r[7],
+                comment=r[8],
+                created_at=r[9],
+                updated_at=r[10],
+            )
+
+
+@app.get("/v1/tasks/{task_id}", response_model=TaskOut)
+def get_task(task_id: int, current_user_id: int = Depends(get_current_user_id)):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                (
+                    "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, created_at, updated_at "
+                    "FROM tasks WHERE task_id=%s AND created_by=%s"
+                ),
+                (task_id, current_user_id),
+            )
+            r = cur.fetchone()
+            if r is None:
+                raise HTTPException(status_code=404, detail={"message": "task not found"})
+            return TaskOut(
+                task_id=r[0],
+                created_by=r[1],
+                task_name=r[2],
+                task_content=r[3],
+                start_at=r[4],
+                end_at=r[5],
+                category=r[6],
+                target_time=r[7],
+                comment=r[8],
+                created_at=r[9],
+                updated_at=r[10],
+            )
+
+
+@app.patch("/v1/tasks/{task_id}", response_model=TaskOut)
+def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(get_current_user_id)):
+    fields = []
+    params: List = []
+    for col, val in (
+        ("task_name", req.task_name),
+        ("task_content", req.task_content),
+        ("start_at", req.start_at),
+        ("end_at", req.end_at),
+        ("category", req.category),
+        ("target_time", req.target_time),
+        ("comment", req.comment),
+    ):
+        if val is not None:
+            fields.append(f"{col}=%s")
+            params.append(val)
+    if not fields:
+        raise HTTPException(status_code=400, detail={"message": "no fields to update"})
+    params.extend([task_id, current_user_id])
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE tasks SET {', '.join(fields)}, updated_at=NOW() WHERE task_id=%s AND created_by=%s",
+                params,
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail={"message": "task not found"})
+            cur.execute(
+                (
+                    "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, created_at, updated_at "
+                    "FROM tasks WHERE task_id=%s AND created_by=%s"
+                ),
+                (task_id, current_user_id),
+            )
+            r = cur.fetchone()
+            return TaskOut(
+                task_id=r[0],
+                created_by=r[1],
+                task_name=r[2],
+                task_content=r[3],
+                start_at=r[4],
+                end_at=r[5],
+                category=r[6],
+                target_time=r[7],
+                comment=r[8],
+                created_at=r[9],
+                updated_at=r[10],
+            )
+
+
+@app.delete("/v1/tasks/{task_id}")
+def delete_task(task_id: int, current_user_id: int = Depends(get_current_user_id)):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # 関連(daily_plans)は外部キーでON DELETE CASCADEを採用
+            cur.execute("DELETE FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail={"message": "task not found"})
+    return {"ok": True}
+
+
+# Daily Plans
+@app.get("/v1/tasks/{task_id}/daily_plans", response_model=List[DailyPlanOut])
+def get_daily_plans(
+    task_id: int,
+    from_: Optional[date] = Query(default=None, alias="from"),
+    to: Optional[date] = None,
+    current_user_id: int = Depends(get_current_user_id),
+):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # 所有確認
+            cur.execute("SELECT 1 FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=404, detail={"message": "task not found"})
+            query = (
+                "SELECT daily_time_plan_id, task_id, created_by, target_date, work_plan_value, time_plan_value, created_at, updated_at "
+                "FROM daily_plans WHERE task_id=%s"
+            )
+            params: List = [task_id]
+            if from_ is not None:
+                query += " AND target_date >= %s"
+                params.append(from_)
+            if to is not None:
+                query += " AND target_date <= %s"
+                params.append(to)
+            query += " ORDER BY target_date ASC"
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            return [
+                DailyPlanOut(
+                    daily_time_plan_id=r[0],
+                    task_id=r[1],
+                    created_by=r[2],
+                    target_date=r[3],
+                    work_plan_value=r[4],
+                    time_plan_value=r[5],
+                    created_at=r[6],
+                    updated_at=r[7],
+                )
+                for r in rows
+            ]
+
+
+@app.put("/v1/tasks/{task_id}/daily_plans/bulk")
+def put_daily_plans_bulk(
+    task_id: int,
+    items: List[DailyPlanBulkItem],
+    current_user_id: int = Depends(get_current_user_id),
+):
+    # 仕様: Σ(work_plan_value)=100, Σ(time_plan_value)=tasks.target_time
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT target_time FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
+            r = cur.fetchone()
+            if r is None:
+                raise HTTPException(status_code=404, detail={"message": "task not found"})
+            target_time = int(r[0])
+            sum_work = sum(i.work_plan_value for i in items)
+            sum_time = sum(i.time_plan_value for i in items)
+            if sum_work != 100 or sum_time != target_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": "invalid plan sum",
+                        "details": {"sum_work": sum_work, "sum_time": sum_time, "target_time": target_time},
+                    },
+                )
+            # 既存削除→一括挿入（単純化）
+            cur.execute("DELETE FROM daily_plans WHERE task_id=%s", (task_id,))
+            for it in items:
+                cur.execute(
+                    (
+                        "INSERT INTO daily_plans (task_id, created_by, target_date, work_plan_value, time_plan_value) "
+                        "VALUES (%s,%s,%s,%s,%s)"
+                    ),
+                    (task_id, current_user_id, it.target_date, it.work_plan_value, it.time_plan_value),
+                )
+    return {"ok": True}
