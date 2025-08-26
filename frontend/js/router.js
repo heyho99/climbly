@@ -2,7 +2,7 @@
 const appRoot = () => document.getElementById('app-root');
 
 
-// { ルート定義, 毎回の遷移前に実行される関数, 遷移後に実行される関数 }
+// ルーター設定{ ルート定義, 毎回の遷移前に実行される関数, 遷移後に実行される関数 }
 let routerConfig = { routes: {}, beforeEach: null, onRender: null };
 
 // ルーターを初期化する関数

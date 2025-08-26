@@ -7,6 +7,7 @@ import { TaskFormView } from './views/task_form.js';
 import { RecordsView } from './views/records.js';
 
 
+// ナビゲーション(ヘッダやサイドバーの)をレンダリングする関数
 function renderNav() {
   const nav = document.getElementById('app-nav');
   const authed = !!getToken();

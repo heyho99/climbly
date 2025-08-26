@@ -1,10 +1,13 @@
+// タスク作成/編集ビュー
+
 import { api } from '../api.js';
 import { navigateTo } from '../router.js';
+
 
 export async function TaskFormView({ mode, id }) {
   let task = null;
   if (mode === 'edit') {
-    try { task = await api.getTask(id); } catch {}
+    try { const res = await api.getTask(id); task = res?.task || null; } catch {}
   }
 
   const initial = task || { task_name:'', task_content:'', category:'study', start_at:'', end_at:'', target_time:0, comment:'' };
@@ -37,7 +40,7 @@ export async function TaskFormView({ mode, id }) {
       <input type="number" name="target_time" value="${initial.target_time||0}" min="0" />
       <label>コメント</label>
       <textarea name="comment" rows="2">${escapeHtml(initial.comment||'')}</textarea>
-      <div class="alert helper">作成時に日次計画の均等割りを自動生成できます。</div>
+      <div class="alert helper">（未実装）作成時に日次計画の均等割りを自動生成できます。</div>
       <label><input type="checkbox" name="auto_plan" checked /> 日次計画を均等割りで自動生成</label>
       <div style="margin-top:12px; display:flex; gap:8px;">
         <button class="btn" type="submit">${mode==='edit'?'更新':'作成'}</button>
@@ -48,9 +51,13 @@ export async function TaskFormView({ mode, id }) {
   </div>`;
 }
 
+// 日付をYYYY-MM-DD形式に変換する関数
 function toDate(dt) { try { return new Date(dt).toISOString().slice(0,10); } catch { return ''; } }
+
+// HTML特殊文字をエスケープ（サニタイズ）し、その値を出力する関数
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
 
+// フォームの値を取得する関数
 function collectForm(form) {
   const fd = new FormData(form);
   const start_date = fd.get('start_date');
@@ -67,6 +74,8 @@ function collectForm(form) {
   const autoPlan = fd.get('auto_plan') === 'on';
   return { payload, autoPlan };
 }
+
+
 
 document.addEventListener('submit', async (e) => {
   const form = e.target.closest('#task-form');
