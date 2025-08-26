@@ -6,6 +6,8 @@
 # docker volume ls  ->  docker volume rm <volume名>
 
 # PGPASSWORD=climbly psql -h 127.0.0.1 -p 5501 -U climbly -d user_db -f DB/init/user/001_schema.sql
+# PGPASSWORD=climbly psql -h 127.0.0.1 -p 5502 -U climbly -d task_db
+
 # -h：ホスト名
 # -p：ポート番号
 # -U：ユーザー名

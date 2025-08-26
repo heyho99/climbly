@@ -40,8 +40,20 @@ export async function TaskFormView({ mode, id }) {
       <input type="number" name="target_time" value="${initial.target_time||0}" min="0" />
       <label>コメント</label>
       <textarea name="comment" rows="2">${escapeHtml(initial.comment||'')}</textarea>
-      <div class="alert helper">（未実装）作成時に日次計画の均等割りを自動生成できます。</div>
-      <label><input type="checkbox" name="auto_plan" checked /> 日次計画を均等割りで自動生成</label>
+      <div class="row" style="margin:8px 0; gap:8px; align-items:center;">
+        <button class="btn secondary" type="button" id="equalize">均等配分</button>
+        <span style="font-size:12px;color:#666;">開始日〜終了日、目標時間に基づき計算します。必要に応じて後で編集予定。</span>
+      </div>
+      <div id="preview" style="display:none; margin:8px 0;">
+        <div style="font-weight:bold; margin-bottom:4px;">日次計画プレビュー</div>
+        <div id="preview-sum" style="margin-bottom:4px; font-size:13px;"></div>
+        <div class="table-wrapper">
+          <table class="table" id="preview-table">
+            <thead><tr><th>日付</th><th>作業(%)</th><th>時間</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
       <div style="margin-top:12px; display:flex; gap:8px;">
         <button class="btn" type="submit">${mode==='edit'?'更新':'作成'}</button>
         <button class="btn secondary" type="button" id="cancel">キャンセル</button>
@@ -71,8 +83,7 @@ function collectForm(form) {
     target_time: Number(fd.get('target_time') || 0),
     comment: fd.get('comment') || '',
   };
-  const autoPlan = fd.get('auto_plan') === 'on';
-  return { payload, autoPlan };
+  return { payload, start_date, end_date };
 }
 
 
@@ -85,14 +96,17 @@ document.addEventListener('submit', async (e) => {
   errBox.style.display = 'none';
   const mode = form.dataset.mode;
   const id = form.dataset.id;
-  const { payload, autoPlan } = collectForm(form);
+  const { payload } = collectForm(form);
 
   try {
     if (mode === 'edit') {
       await api.updateTask(id, payload);
     } else {
-      const body = autoPlan ? { ...payload, allow_auto_distribution: true } : payload;
-      await api.createTask(body);
+      const items = form._planItems || [];
+      // 送信前バリデーション
+      const vErr = validateBeforeSubmit(payload, items);
+      if (vErr) throw new Error(vErr);
+      await api.createTaskWithPlans(payload, items);
     }
     navigateTo('/tasks');
   } catch (err) {
@@ -106,4 +120,80 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('/tasks');
   }
+  
+  if (e.target && e.target.id === 'equalize') {
+    e.preventDefault();
+    const form = document.getElementById('task-form');
+    if (!form) return;
+    const { payload, start_date, end_date } = collectForm(form);
+    const errBox = document.getElementById('task-error');
+    errBox.style.display = 'none';
+    const items = buildEqualizedItems(start_date, end_date, Number(payload.target_time||0));
+    if (typeof items === 'string') {
+      // エラーメッセージを返す場合
+      errBox.textContent = items;
+      errBox.style.display = 'block';
+      return;
+    }
+    form._planItems = items; // フォームインスタンスに保持
+    renderPreview(items, Number(payload.target_time||0));
+  }
 });
+
+// 均等配分で日次計画を作成
+function buildEqualizedItems(start_date, end_date, target_time) {
+  if (!start_date || !end_date) return '開始日と終了日は必須です。';
+  const sd = new Date(start_date);
+  const ed = new Date(end_date);
+  if (isNaN(sd) || isNaN(ed)) return '日付の形式が不正です。';
+  if (ed < sd) return '終了日は開始日以降である必要があります。';
+  if (target_time < 0) return '目標時間は0以上を指定してください。';
+  const days = Math.floor((ed - sd) / (24*3600*1000)) + 1;
+  if (days <= 0) return '期間が不正です。';
+
+  // 作業%は100を日数で整数割り、余りは前方に+1
+  const baseW = Math.floor(100 / days);
+  let remW = 100 - baseW * days;
+  const baseT = Math.floor(target_time / days);
+  let remT = target_time - baseT * days;
+
+  const items = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(sd.getTime() + i * 24*3600*1000);
+    const dateStr = d.toISOString().slice(0,10);
+    const w = baseW + (remW > 0 ? 1 : 0);
+    if (remW > 0) remW--;
+    const t = baseT + (remT > 0 ? 1 : 0);
+    if (remT > 0) remT--;
+    items.push({ target_date: dateStr, work_plan_value: w, time_plan_value: t });
+  }
+  return items;
+}
+
+function renderPreview(items, target_time) {
+  const p = document.getElementById('preview');
+  const tbody = document.querySelector('#preview-table tbody');
+  const sumBox = document.getElementById('preview-sum');
+  if (!p || !tbody || !sumBox) return;
+  tbody.innerHTML = items.map(it => `<tr><td>${it.target_date}</td><td style="text-align:right;">${it.work_plan_value}</td><td style="text-align:right;">${it.time_plan_value}</td></tr>`).join('');
+  const sumW = items.reduce((a,b)=>a+Number(b.work_plan_value||0),0);
+  const sumT = items.reduce((a,b)=>a+Number(b.time_plan_value||0),0);
+  sumBox.textContent = `合計: 作業 ${sumW}% / 時間 ${sumT}（目標 ${target_time}）`;
+  p.style.display = 'block';
+}
+
+function validateBeforeSubmit(payload, items) {
+  // 必須
+  if (!payload.start_at || !payload.end_at) return '開始日と終了日は必須です。';
+  const sd = new Date(payload.start_at);
+  const ed = new Date(payload.end_at);
+  if (ed < sd) return '終了日は開始日以降である必要があります。';
+  if (payload.target_time < 0) return '目標時間は0以上を指定してください。';
+  if (!items || items.length === 0) return '均等配分を押して日次計画を作成してください。';
+  // 合計チェック
+  const sumW = items.reduce((a,b)=>a+Number(b.work_plan_value||0),0);
+  const sumT = items.reduce((a,b)=>a+Number(b.time_plan_value||0),0);
+  if (sumW !== 100) return '作業(%)の合計が100になっていません。';
+  if (sumT !== Number(payload.target_time||0)) return '時間の合計が目標時間と一致していません。';
+  return '';
+}
