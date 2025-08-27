@@ -37,7 +37,7 @@ export const api = {
     return request(`/tasks?${qs}`);
   },
   async getTask(task_id) { return request(`/tasks/${task_id}`); },
-  async createTask(payload) { return request('/tasks', { method:'POST', body: payload }); },
+  // async createTask(payload) { return request('/tasks', { method:'POST', body: payload }); },
   async updateTask(task_id, payload) { return request(`/tasks/${task_id}`, { method:'PATCH', body: payload }); },
   async deleteTask(task_id) { return request(`/tasks/${task_id}`, { method:'DELETE' }); },
   async createTaskWithPlans(taskPayload, items) {
