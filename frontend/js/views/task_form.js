@@ -2,6 +2,7 @@
 
 import { api } from '../api.js';
 import { navigateTo } from '../router.js';
+import { initDailyPlanChart } from './components/daily_plan_chart.js';
 
 
 export async function TaskFormView({ mode, id }) {
@@ -47,6 +48,7 @@ export async function TaskFormView({ mode, id }) {
       <div id="preview" style="display:none; margin:8px 0;">
         <div style="font-weight:bold; margin-bottom:4px;">日次計画プレビュー</div>
         <div id="preview-sum" style="margin-bottom:4px; font-size:13px;"></div>
+        <div id="daily-plan-chart" style="width:100%;height:360px;margin-bottom:8px;"></div>
         <div class="table-wrapper">
           <table class="table" id="preview-table">
             <thead><tr><th>日付</th><th>作業(%)</th><th>時間</th></tr></thead>
@@ -137,6 +139,20 @@ document.addEventListener('click', (e) => {
     }
     form._planItems = items; // フォームインスタンスに保持
     renderPreview(items, Number(payload.target_time||0));
+
+    // ECharts を初期化し、点編集結果をフォームに反映
+    const el = document.getElementById('daily-plan-chart');
+    if (el) {
+      initDailyPlanChart({
+        el,
+        items,
+        onChange(updated) {
+          form._planItems = updated;
+          // 合計表示を更新（テーブルも更新しておく）
+          renderPreview(updated, Number(payload.target_time||0));
+        }
+      });
+    }
   }
 });
 
