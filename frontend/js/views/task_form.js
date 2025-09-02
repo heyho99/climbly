@@ -108,7 +108,10 @@ document.addEventListener('submit', async (e) => {
 
   try {
     if (mode === 'edit') {
-      await api.updateTask(id, payload);
+      const items = form._planItems || [];
+      const vErr = validateBeforeSubmit(payload, items);
+      if (vErr) throw new Error(vErr);
+      await api.updateTaskWithPlans(id, payload, items);
     } else {
       const items = form._planItems || [];
       // 送信前バリデーション

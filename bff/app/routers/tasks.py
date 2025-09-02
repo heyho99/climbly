@@ -155,3 +155,82 @@ def create_task_with_plans(payload: Dict[str, Any], request: Request):
     except httpx.RequestError as e:
         # task-service自体に到達できない
         raise HTTPException(status_code=502, detail={"message": "task-service unavailable", "error": str(e)})
+
+
+# 合成API: タスク更新 + 日次計画一括更新（失敗時は補償で元に戻す）
+@router.patch("/tasks_with_plans/{task_id}")
+def update_task_with_plans(task_id: int, payload: Dict[str, Any], request: Request):
+    """
+    入力例:
+    {
+      "task": { ... TaskUpdate 相当（部分更新可） ... },
+      "daily_plans": { "items": [ {"target_date":"YYYY-MM-DD","work_plan_value":int,"time_plan_value":int}, ... ] }
+    }
+    挙動:
+      1) 現在のタスクを取得（補償用に保持）
+      2) task PATCH（bodyが空ならスキップ）
+      3) 日次計画 bulk（upsert+prune）
+      4) 3) が失敗したら 2) の更新を補償（元タスクでPATCH）
+    """
+    headers = _forward_auth_headers(request)
+    task_body: Dict[str, Any] = payload.get("task") or {}
+    plans = payload.get("daily_plans") or {}
+    items: List[Dict[str, Any]] = plans.get("items") or []
+
+    if not isinstance(items, list) or len(items) == 0:
+        raise HTTPException(status_code=400, detail={"message": "daily_plans.items is required"})
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            # 1) 現在のタスクを取得
+            cur_task_resp = client.get(f"{TASK_SVC_BASE}/tasks/{task_id}", headers=headers)
+            if not cur_task_resp.is_success:
+                raise HTTPException(status_code=cur_task_resp.status_code, detail=cur_task_resp.json())
+            original_task = cur_task_resp.json()
+
+            # 2) タスク更新（task_bodyが空ならスキップ）
+            updated_task = original_task
+            if task_body:
+                patch_resp = client.patch(f"{TASK_SVC_BASE}/tasks/{task_id}", json=task_body, headers=headers)
+                if not patch_resp.is_success:
+                    raise HTTPException(status_code=patch_resp.status_code, detail=patch_resp.json())
+                updated_task = patch_resp.json()
+
+            # 2.5) 軽量検証（合計チェック）。target_time は更新後の値で評価
+            try:
+                sum_work = sum(int(x.get("work_plan_value", 0)) for x in items)
+                sum_time = sum(int(x.get("time_plan_value", 0)) for x in items)
+                tgt_time = int(updated_task.get("target_time", 0))
+                if sum_work != 100:
+                    raise HTTPException(status_code=400, detail={"message": "sum(work_plan_value) must be 100"})
+                if sum_time != tgt_time:
+                    raise HTTPException(status_code=400, detail={"message": "sum(time_plan_value) must equal task.target_time"})
+            except ValueError:
+                raise HTTPException(status_code=400, detail={"message": "invalid daily_plans items"})
+
+            # 3) 日次計画bulk（upsert+prune）
+            bulk_resp = client.put(
+                f"{TASK_SVC_BASE}/tasks/{task_id}/daily_plans/bulk",
+                json=items,
+                headers=headers,
+            )
+            if not bulk_resp.is_success:
+                # 4) 補償: タスクを元に戻す（best-effort）
+                try:
+                    revert = {
+                        "task_name": original_task.get("task_name"),
+                        "task_content": original_task.get("task_content"),
+                        "start_at": original_task.get("start_at"),
+                        "end_at": original_task.get("end_at"),
+                        "category": original_task.get("category"),
+                        "target_time": original_task.get("target_time"),
+                        "comment": original_task.get("comment"),
+                    }
+                    client.patch(f"{TASK_SVC_BASE}/tasks/{task_id}", json=revert, headers=headers)
+                finally:
+                    raise HTTPException(status_code=bulk_resp.status_code, detail=bulk_resp.json())
+
+        # 成功
+        return {"task": updated_task, "daily_plans_count": len(items)}
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "task-service unavailable", "error": str(e)})

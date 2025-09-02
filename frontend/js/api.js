@@ -43,6 +43,9 @@ export const api = {
   async createTaskWithPlans(taskPayload, items) {
     return request('/tasks_with_plans', { method:'POST', body: { task: taskPayload, daily_plans: { items } } });
   },
+  async updateTaskWithPlans(task_id, taskPayload, items) {
+    return request(`/tasks_with_plans/${task_id}`, { method:'PATCH', body: { task: taskPayload, daily_plans: { items } } });
+  },
 
   // Records
   async listRecords(params={}) {
