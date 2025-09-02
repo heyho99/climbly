@@ -5,6 +5,7 @@ import { DashboardView } from './views/dashboard.js';
 import { TasksView } from './views/tasks.js';
 import { TaskFormView } from './views/task_form.js';
 import { RecordsView } from './views/records.js';
+import { RecordsBoardView } from './views/records_board.js';
 
 
 // ナビゲーション(ヘッダやサイドバーの)をレンダリングする関数
@@ -15,6 +16,7 @@ function renderNav() {
     <a href="#/dashboard" data-link>ダッシュボード</a>
     <a href="#/tasks" data-link>タスク</a>
     <a href="#/records" data-link>実績</a>
+    <a href="#/records/board" data-link>実績(ボード)</a>
     <a href="#/login" id="logout-link" data-link>ログアウト</a>
   ` : `
     <a href="#/login" data-link>ログイン</a>
@@ -59,6 +61,7 @@ const routes = {
   '/tasks/new': (params) => TaskFormView({ mode: 'create', ...params }),
   '/tasks/:id': (params) => TaskFormView({ mode: 'edit', ...params }),
   '/records': RecordsView,
+  '/records/board': RecordsBoardView,
 };
 
 // ルーターを初期化（ルーター設定の反映、hashchangeイベントリスナーの作成、）

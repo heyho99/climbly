@@ -19,6 +19,15 @@ async function request(path, { method='GET', body, headers={} } = {}) {
   return res.json();
 }
 
+// 未定義/空値を除外してクエリ文字列を生成
+function toQuery(params = {}) {
+  const cleaned = Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+  );
+  const qs = new URLSearchParams(cleaned).toString();
+  return qs ? `?${qs}` : '';
+}
+
 
 // BFFへのAPI呼び出しの関数をまとめた、apiオブジェクトを定義（中核）
 export const api = {
@@ -33,8 +42,8 @@ export const api = {
 
   // Tasks
   async listTasks(params={}) {
-    const qs = new URLSearchParams({ mine:'true', ...params }).toString();
-    return request(`/tasks?${qs}`);
+    const qs = toQuery({ mine:'true', ...params });
+    return request(`/tasks${qs}`);
   },
   async getTask(task_id) { return request(`/tasks/${task_id}`); },
   // async createTask(payload) { return request('/tasks', { method:'POST', body: payload }); },
@@ -45,9 +54,19 @@ export const api = {
   },
 
   // Records
+  // 互換関数: 既存コードからは diary を呼ぶ
   async listRecords(params={}) {
-    const qs = new URLSearchParams(params).toString();
-    return request(`/records?${qs}`);
+    const qs = toQuery(params);
+    return request(`/records/diary${qs}`);
+  },
+  // 明示的関数
+  async listRecordsDiary(params={}) {
+    const qs = toQuery(params);
+    return request(`/records/diary${qs}`);
+  },
+  async listRecordsByTask(params={}) {
+    const qs = toQuery(params);
+    return request(`/records/by_task${qs}`);
   },
   async createRecord(payload) { return request('/records', { method:'POST', body: payload }); },
   async updateRecord(id, payload) { return request(`/records/${id}`, { method:'PATCH', body: payload }); },
