@@ -60,4 +60,6 @@ async function handleRoute() {
   const html = await View(params);
   appRoot().innerHTML = html;
   if (routerConfig.onRender) routerConfig.onRender();
+  // 各ビューのafter-render初期化用フック
+  try { window.dispatchEvent(new Event('app:rendered')); } catch {}
 }
