@@ -23,8 +23,8 @@ export async function TasksView() {
             <td>${t.start_at ? new Date(t.start_at).toLocaleDateString() : ''} - ${t.end_at ? new Date(t.end_at).toLocaleDateString() : ''}</td>
             <td>${t.category || ''}</td>
             <td>${t.target_time ?? ''}</td>
-            <td><button class="btn secondary" data-edit="${t.task_id}">編集</button>
-                <button class="btn danger" data-del="${t.task_id}">削除</button></td>
+            <td><button class="btn secondary" data-edit-task="${t.task_id}">編集</button>
+                <button class="btn danger" data-del-task="${t.task_id}">削除</button></td>
           </tr>
         `).join('')}
       </tbody>
@@ -38,10 +38,10 @@ document.addEventListener('click', async (e) => {
     e.preventDefault();
     navigateTo('/tasks/new');
   }
-  const editId = e.target && e.target.getAttribute && e.target.getAttribute('data-edit');
+  const editId = e.target && e.target.getAttribute && e.target.getAttribute('data-edit-task');
   if (editId) { navigateTo(`/tasks/${editId}`); }
 
-  const delId = e.target && e.target.getAttribute && e.target.getAttribute('data-del');
+  const delId = e.target && e.target.getAttribute && e.target.getAttribute('data-del-task');
   if (delId) {
     if (!confirm('削除しますか？')) return;
     try { await api.deleteTask(delId); location.reload(); } catch (err) { alert(err.message); }
