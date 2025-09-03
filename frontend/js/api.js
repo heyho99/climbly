@@ -72,6 +72,7 @@ export const api = {
     return request(`/records/by_task${qs}`);
   },
   async createRecord(payload) { return request('/records', { method:'POST', body: payload }); },
+  async getRecord(id) { return request(`/records/${id}`); },
   async updateRecord(id, payload) { return request(`/records/${id}`, { method:'PATCH', body: payload }); },
   async deleteRecord(id) { return request(`/records/${id}`, { method:'DELETE' }); },
 };

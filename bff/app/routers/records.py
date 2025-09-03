@@ -111,6 +111,26 @@ async def list_records_diary(
         raise HTTPException(status_code=503, detail={"message": "record service unavailable", "error": str(e)})
 
 
+@router.get("/records/{record_work_id}")
+async def get_record(record_work_id: int, auth_header: dict = Depends(get_auth_header)):
+    """単一実績をrecord-serviceから取得"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{RECORD_SVC_BASE}/records/{record_work_id}",
+                headers=auth_header,
+                timeout=30.0
+            )
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=response.json() if response.headers.get("content-type") == "application/json" else {"message": "record service error"}
+                )
+            return response.json()
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail={"message": "record service unavailable", "error": str(e)})
+
+
 @router.post("/records")
 async def create_record(payload: dict, auth_header: dict = Depends(get_auth_header)):
     """実績作成をrecord-serviceに委譲"""

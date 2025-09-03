@@ -88,18 +88,24 @@ export function setupRecordsBoardEvents() {
 
   // 編集ボタン
   document.querySelectorAll('[data-edit-record]').forEach(btn => {
-    btn.onclick = (e) => {
+    btn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const recordId = e.target.dataset.editRecord;
-      // 既存レコードの情報を取得してモーダルを表示
-      const existingRecord = findRecordById(recordId);
-      showRecordFormModal({ 
-        mode: 'edit', 
-        recordId,
-        record: existingRecord,
-        onSubmit: (data) => editRecord(recordId, data) 
-      });
+      
+      try {
+        // APIから既存レコードの情報を取得
+        const existingRecord = await api.getRecord(recordId);
+        showRecordFormModal({ 
+          mode: 'edit', 
+          recordId,
+          record: existingRecord,
+          onSubmit: (data) => editRecord(recordId, data) 
+        });
+      } catch (error) {
+        console.error('Failed to fetch record:', error);
+        alert('実績データの取得に失敗しました: ' + error.message);
+      }
     };
   });
 
@@ -153,45 +159,4 @@ async function deleteRecord(recordId) {
     console.error('Failed to delete record', e);
     alert('実績の削除に失敗しました: ' + e.message);
   }
-}
-
-// レコードIDから既存レコードを検索する関数
-function findRecordById(recordId) {
-  const allRecords = [];
-  const tasks = document.querySelectorAll('.kanban-column');
-  tasks.forEach(taskColumn => {
-    const records = taskColumn.querySelectorAll('.kanban-card');
-    records.forEach(recordCard => {
-      const editBtn = recordCard.querySelector('[data-edit-record]');
-      if (editBtn && editBtn.dataset.editRecord === recordId) {
-        // カードの内容を解析して既存データを抽出
-        const rows = recordCard.querySelectorAll('.kanban-card__row');
-        const dateText = rows[0]?.querySelector('.badge')?.textContent || '';
-        const timeText = rows[1]?.textContent || '';
-        const progressTimeText = rows[2]?.textContent || '';
-        const noteElement = recordCard.querySelector('.kanban-card__note');
-        
-        // テキストから値を抽出（簡易版）
-        const progressMatch = progressTimeText.match(/進捗: ([^/]*)/);
-        const timeMatch = progressTimeText.match(/時間: ([^分]*)/);
-        
-        return {
-          start_at: '', // 実際のAPIでは正確な日時データが必要
-          end_at: '',
-          progress_value: progressMatch ? progressMatch[1].trim() : '',
-          work_time: timeMatch ? timeMatch[1].trim() : '',
-          note: noteElement ? noteElement.textContent : ''
-        };
-      }
-    });
-  });
-  
-  // 実際のAPIでは recordId でレコードを取得
-  return {
-    start_at: '',
-    end_at: '',
-    progress_value: '',
-    work_time: '',
-    note: ''
-  };
 }
