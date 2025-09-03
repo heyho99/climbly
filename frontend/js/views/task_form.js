@@ -2,12 +2,18 @@
 
 import { api } from '../api.js';
 import { navigateTo } from '../router.js';
+import { initDailyPlanChart } from './components/daily_plan_chart.js';
 
 
 export async function TaskFormView({ mode, id }) {
   let task = null;
+  let dailyPlans = [];
   if (mode === 'edit') {
-    try { const res = await api.getTask(id); task = res?.task || null; } catch {}
+    try {
+      const res = await api.getTask(id);
+      task = res?.task || null;
+      dailyPlans = Array.isArray(res?.daily_plans) ? res.daily_plans : [];
+    } catch {}
   }
 
   const initial = task || { task_name:'', task_content:'', category:'study', start_at:'', end_at:'', target_time:0, comment:'' };
@@ -47,6 +53,7 @@ export async function TaskFormView({ mode, id }) {
       <div id="preview" style="display:none; margin:8px 0;">
         <div style="font-weight:bold; margin-bottom:4px;">日次計画プレビュー</div>
         <div id="preview-sum" style="margin-bottom:4px; font-size:13px;"></div>
+        <div id="daily-plan-chart" style="width:100%;height:360px;margin-bottom:8px;"></div>
         <div class="table-wrapper">
           <table class="table" id="preview-table">
             <thead><tr><th>日付</th><th>作業(%)</th><th>時間</th></tr></thead>
@@ -59,6 +66,7 @@ export async function TaskFormView({ mode, id }) {
         <button class="btn secondary" type="button" id="cancel">キャンセル</button>
       </div>
       <div id="task-error" class="alert" style="display:none; margin-top:8px;"></div>
+      ${mode==='edit' ? `<script id="initial-plans" type="application/json">${JSON.stringify(dailyPlans||[])}</script>` : ''}
     </form>
   </div>`;
 }
@@ -100,7 +108,10 @@ document.addEventListener('submit', async (e) => {
 
   try {
     if (mode === 'edit') {
-      await api.updateTask(id, payload);
+      const items = form._planItems || [];
+      const vErr = validateBeforeSubmit(payload, items);
+      if (vErr) throw new Error(vErr);
+      await api.updateTaskWithPlans(id, payload, items);
     } else {
       const items = form._planItems || [];
       // 送信前バリデーション
@@ -113,6 +124,38 @@ document.addEventListener('submit', async (e) => {
     errBox.textContent = err.message;
     errBox.style.display = 'block';
   }
+});
+
+// 画面描画完了イベントで、編集モードなら初期プレビューとグラフを表示
+window.addEventListener('app:rendered', () => {
+  const form = document.getElementById('task-form');
+  if (!form) return;
+  if (form.dataset.mode !== 'edit') return;
+  if (form._initializedPreview) return;
+  const script = document.getElementById('initial-plans');
+  if (!script) return;
+  let items = [];
+  try { items = JSON.parse(script.textContent || '[]'); } catch {}
+  if (!Array.isArray(items) || items.length === 0) { form._initializedPreview = true; return; }
+  form._planItems = items;
+  const fd = new FormData(form);
+  const target = Number(fd.get('target_time') || 0);
+  renderPreview(items, target);
+  const el = document.getElementById('daily-plan-chart');
+  if (el) {
+    initDailyPlanChart({
+      el,
+      items,
+      onChange(updated) {
+        form._planItems = updated;
+        // 最新の目標時間で再計算表示
+        const fd2 = new FormData(form);
+        const tgt = Number(fd2.get('target_time') || 0);
+        renderPreview(updated, tgt);
+      }
+    });
+  }
+  form._initializedPreview = true;
 });
 
 document.addEventListener('click', (e) => {
@@ -137,6 +180,20 @@ document.addEventListener('click', (e) => {
     }
     form._planItems = items; // フォームインスタンスに保持
     renderPreview(items, Number(payload.target_time||0));
+
+    // ECharts を初期化し、点編集結果をフォームに反映
+    const el = document.getElementById('daily-plan-chart');
+    if (el) {
+      initDailyPlanChart({
+        el,
+        items,
+        onChange(updated) {
+          form._planItems = updated;
+          // 合計表示を更新（テーブルも更新しておく）
+          renderPreview(updated, Number(payload.target_time||0));
+        }
+      });
+    }
   }
 });
 

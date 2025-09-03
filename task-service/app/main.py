@@ -285,30 +285,82 @@ def put_daily_plans_bulk(
 ):
     # 仕様: Σ(work_plan_value)=100, Σ(time_plan_value)=tasks.target_time
     with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT target_time FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
-            r = cur.fetchone()
-            if r is None:
-                raise HTTPException(status_code=404, detail={"message": "task not found"})
-            target_time = int(r[0])
-            sum_work = sum(i.work_plan_value for i in items)
-            sum_time = sum(i.time_plan_value for i in items)
-            if sum_work != 100 or sum_time != target_time:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "message": "invalid plan sum",
-                        "details": {"sum_work": sum_work, "sum_time": sum_time, "target_time": target_time},
-                    },
-                )
-            # 既存削除→一括挿入（単純化）
-            cur.execute("DELETE FROM daily_plans WHERE task_id=%s", (task_id,))
-            for it in items:
+        # 差分適用を原子的に行いたいのでトランザクションを明示管理
+        conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                # タスク所有と目標時間の取得
+                cur.execute("SELECT target_time FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
+                r = cur.fetchone()
+                if r is None:
+                    conn.rollback()
+                    raise HTTPException(status_code=404, detail={"message": "task not found"})
+                target_time = int(r[0])
+
+                # 合計検証
+                sum_work = sum(i.work_plan_value for i in items)
+                sum_time = sum(i.time_plan_value for i in items)
+                if sum_work != 100 or sum_time != target_time:
+                    conn.rollback()
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "message": "invalid plan sum",
+                            "details": {"sum_work": sum_work, "sum_time": sum_time, "target_time": target_time},
+                        },
+                    )
+
+                # 既存レコードを取得（target_dateをキーに差分判定）
                 cur.execute(
                     (
-                        "INSERT INTO daily_plans (task_id, created_by, target_date, work_plan_value, time_plan_value) "
-                        "VALUES (%s,%s,%s,%s,%s)"
+                        "SELECT target_date, daily_time_plan_id FROM daily_plans "
+                        "WHERE task_id=%s ORDER BY target_date ASC"
                     ),
-                    (task_id, current_user_id, it.target_date, it.work_plan_value, it.time_plan_value),
+                    (task_id,),
                 )
-    return {"ok": True}
+                rows = cur.fetchall()
+                existing_dates = {row[0] for row in rows}
+
+                # 入力の辞書化（target_date -> item）
+                incoming_map = {i.target_date: i for i in items}
+                incoming_dates = set(incoming_map.keys())
+
+                # 1) UPDATE/INSERT
+                for td, it in incoming_map.items():
+                    if td in existing_dates:
+                        # 値更新（ID維持）。updated_atはDB側トリガ or NOW() 更新のいずれか。
+                        cur.execute(
+                            (
+                                "UPDATE daily_plans SET work_plan_value=%s, time_plan_value=%s, updated_at=NOW() "
+                                "WHERE task_id=%s AND target_date=%s"
+                            ),
+                            (it.work_plan_value, it.time_plan_value, task_id, td),
+                        )
+                    else:
+                        # 新規挿入
+                        cur.execute(
+                            (
+                                "INSERT INTO daily_plans (task_id, created_by, target_date, work_plan_value, time_plan_value) "
+                                "VALUES (%s,%s,%s,%s,%s)"
+                            ),
+                            (task_id, current_user_id, it.target_date, it.work_plan_value, it.time_plan_value),
+                        )
+
+                # 2) PRUNE: 新配列に無い既存日付を削除
+                to_delete = existing_dates - incoming_dates
+                if to_delete:
+                    # ここで records がある日付の扱いをポリシー化する場合は除外や事前検証を挟む
+                    # 今は単純に削除する（将来拡張余地）
+                    # IN 句用にタプル化
+                    cur.execute(
+                        (
+                            "DELETE FROM daily_plans WHERE task_id=%s AND target_date = ANY(%s)"
+                        ),
+                        (task_id, list(to_delete)),
+                    )
+
+            conn.commit()
+            return {"ok": True, "upserted": len(items), "pruned": len(to_delete)}
+        except Exception:
+            conn.rollback()
+            raise
