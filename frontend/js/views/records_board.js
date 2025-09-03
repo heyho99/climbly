@@ -27,8 +27,8 @@ export async function RecordsBoardView(params = {}) {
             <div class="kanban-card__row">進捗: ${r.progress_value ?? ''} / 時間: ${r.work_time ?? ''} 分</div>
             ${r.note ? `<div class="kanban-card__note">${r.note}</div>` : ''}
             <div class="kanban-card__actions">
-              <button class="btn btn-xs" data-edit="${r.record_work_id}">編集</button>
-              <button class="btn btn-xs btn-danger" data-del="${r.record_work_id}">削除</button>
+              <button class="btn btn-xs" data-edit-record="${r.record_work_id}">編集</button>
+              <button class="btn btn-xs btn-danger" data-del-record="${r.record_work_id}">削除</button>
             </div>
           </div>
         `).join('')}
@@ -87,11 +87,11 @@ export function setupRecordsBoardEvents() {
   });
 
   // 編集ボタン
-  document.querySelectorAll('[data-edit]').forEach(btn => {
+  document.querySelectorAll('[data-edit-record]').forEach(btn => {
     btn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const recordId = e.target.dataset.edit;
+      const recordId = e.target.dataset.editRecord;
       // 既存レコードの情報を取得してモーダルを表示
       const existingRecord = findRecordById(recordId);
       showRecordFormModal({ 
@@ -104,9 +104,9 @@ export function setupRecordsBoardEvents() {
   });
 
   // 削除ボタン
-  document.querySelectorAll('[data-del]').forEach(btn => {
+  document.querySelectorAll('[data-del-record]').forEach(btn => {
     btn.onclick = (e) => {
-      const recordId = e.target.dataset.del;
+      const recordId = e.target.dataset.delRecord;
       showDeleteConfirmModal({ 
         onConfirm: () => deleteRecord(recordId) 
       });
@@ -118,13 +118,13 @@ export function setupRecordsBoardEvents() {
 async function addRecord(taskId, data) {
   try {
     console.log('Adding record:', { taskId, ...data });
-    // await api.createRecord({ task_id: taskId, ...data });
-    alert('実績が追加されました（仮）');
+    await api.createRecord({ task_id: taskId, ...data });
+    alert('実績が追加されました');
     // ページを再読み込みして最新データを表示
     location.reload();
   } catch (e) {
     console.error('Failed to add record', e);
-    alert('実績の追加に失敗しました');
+    alert('実績の追加に失敗しました: ' + e.message);
   }
 }
 
@@ -132,40 +132,38 @@ async function addRecord(taskId, data) {
 async function editRecord(recordId, data) {
   try {
     console.log('Editing record:', { recordId, ...data });
-    // await api.updateRecord(recordId, data);
-    alert('実績が更新されました（仮）');
+    await api.updateRecord(recordId, data);
+    alert('実績が更新されました');
     // ページを再読み込みして最新データを表示
     location.reload();
   } catch (e) {
     console.error('Failed to edit record', e);
-    alert('実績の更新に失敗しました');
+    alert('実績の更新に失敗しました: ' + e.message);
   }
 }
 
 // 実績削除処理
 async function deleteRecord(recordId) {
   try {
-    console.log('Deleting record:', recordId);
-    // await api.deleteRecord(recordId);
-    alert('実績が削除されました（仮）');
+    await api.deleteRecord(recordId);
+    alert('実績が削除されました');
     // ページを再読み込みして最新データを表示
     location.reload();
   } catch (e) {
     console.error('Failed to delete record', e);
-    alert('実績の削除に失敗しました');
+    alert('実績の削除に失敗しました: ' + e.message);
   }
 }
 
 // レコードIDから既存レコードを検索する関数
 function findRecordById(recordId) {
-  // 現在表示されているデータから該当レコードを探す
   const allRecords = [];
   const tasks = document.querySelectorAll('.kanban-column');
   tasks.forEach(taskColumn => {
     const records = taskColumn.querySelectorAll('.kanban-card');
     records.forEach(recordCard => {
-      const editBtn = recordCard.querySelector('[data-edit]');
-      if (editBtn && editBtn.dataset.edit === recordId) {
+      const editBtn = recordCard.querySelector('[data-edit-record]');
+      if (editBtn && editBtn.dataset.editRecord === recordId) {
         // カードの内容を解析して既存データを抽出
         const rows = recordCard.querySelectorAll('.kanban-card__row');
         const dateText = rows[0]?.querySelector('.badge')?.textContent || '';

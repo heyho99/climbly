@@ -83,12 +83,14 @@ Daily Plans（`daily_plans`）:
 ## record-service（実績記録・集計）
 
 Record Works（`record_works`）:
-- GET `/v1/record_works?task_id=&from=&to=&page=...`
-- POST `/v1/record_works`
+- GET `/v1/records?task_id=&from=&to=&page=...`
+- POST `/v1/records`
   - 入力: `task_id`, `start_at`, `end_at`, `progress_value(0-100)`, `work_time`, `note?`
-- GET `/v1/record_works/{record_work_id}`
-- PATCH `/v1/record_works/{record_work_id}`
-- DELETE `/v1/record_works/{record_work_id}`
+- GET `/v1/records/{record_work_id}`
+- PATCH `/v1/records/{record_work_id}`
+- DELETE `/v1/records/{record_work_id}`
+- GET `/v1/records/by_task?task_id=&from=&to=`
+  - 出力: タスク別にグループ化された実績データ（カンバン表示用）
 
 Metrics（ダッシュボード/グラフ用）:
 - GET `/v1/metrics/works/daily?from=&to=&task_id=`
@@ -98,6 +100,7 @@ Metrics（ダッシュボード/グラフ用）:
     - 現在進行中のタスク数
     - 累計タスク完了数
     - 今月のタスク完了数
+    - 今月/累計の作業時間
     - 今月/累計の作業時間
 
 ---
@@ -145,7 +148,10 @@ Tasks（グラフ同梱ビュー）:
 - DELETE `/bff/v1/tasks/{task_id}`
 
 Records（実績記録ビュー）:
-- GET `/bff/v1/records?mode=by_task|journal&task_id=&from=&to=&page=...`
+- GET `/bff/v1/records/by_task?task_id=&from=&to=`
+  - タスク別実績一覧（カンバン表示用）
+- GET `/bff/v1/records/diary?page=&per_page=&from=&to=`
+  - 時系列実績一覧（日記形式）
 - POST `/bff/v1/records`
 - PATCH `/bff/v1/records/{record_work_id}`
 - DELETE `/bff/v1/records/{record_work_id}`

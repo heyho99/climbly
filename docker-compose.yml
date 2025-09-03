@@ -80,8 +80,26 @@ services:
       - climbly-net
 
 
-  # record-service:
-  #   # TODO: 実装後に追加。dev(8084:80)
+  record-service:
+    build:
+      context: ./record-service
+    image: climbly/record-service:dev
+    container_name: climbly-record-service
+    environment:
+      - JWT_SECRET=dev-secret
+      - JWT_EXPIRE_DAYS=7
+      - DB_HOST=climbly-record-db
+      - DB_PORT=5432
+      - DB_NAME=record_db
+      - DB_USER=climbly
+      - DB_PASSWORD=climbly
+    ports:
+      - "8084:80" # dev(8084:80)
+    restart: unless-stopped
+    networks:
+      - climbly-net
+
+
   # subtask-service:
   #   # TODO: 実装後に追加。dev(8085:80)
 
