@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { showRecordFormModal, showDeleteConfirmModal } from './records.js';
 
 // カンバン風: タスクごとにカラムを並べ、各タスクのrecord_worksをカード表示
 export async function RecordsBoardView(params = {}) {
@@ -67,5 +68,132 @@ export async function RecordsBoardView(params = {}) {
     <div class="kanban">
       ${columnHtml || '<div class="helper">表示するタスクがありません</div>'}
     </div>
+    <div id="modal-root"></div>
   </div>`;
+}
+
+// イベントハンドラを設定する関数
+export function setupRecordsBoardEvents() {
+  // 実績追加ボタン
+  document.querySelectorAll('[data-add-record]').forEach(btn => {
+    btn.onclick = (e) => {
+      const taskId = e.target.dataset.addRecord;
+      showRecordFormModal({ 
+        mode: 'add', 
+        taskId,
+        onSubmit: (data) => addRecord(taskId, data) 
+      });
+    };
+  });
+
+  // 編集ボタン
+  document.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const recordId = e.target.dataset.edit;
+      // 既存レコードの情報を取得してモーダルを表示
+      const existingRecord = findRecordById(recordId);
+      showRecordFormModal({ 
+        mode: 'edit', 
+        recordId,
+        record: existingRecord,
+        onSubmit: (data) => editRecord(recordId, data) 
+      });
+    };
+  });
+
+  // 削除ボタン
+  document.querySelectorAll('[data-del]').forEach(btn => {
+    btn.onclick = (e) => {
+      const recordId = e.target.dataset.del;
+      showDeleteConfirmModal({ 
+        onConfirm: () => deleteRecord(recordId) 
+      });
+    };
+  });
+}
+
+// 実績追加処理
+async function addRecord(taskId, data) {
+  try {
+    console.log('Adding record:', { taskId, ...data });
+    // await api.createRecord({ task_id: taskId, ...data });
+    alert('実績が追加されました（仮）');
+    // ページを再読み込みして最新データを表示
+    location.reload();
+  } catch (e) {
+    console.error('Failed to add record', e);
+    alert('実績の追加に失敗しました');
+  }
+}
+
+// 実績編集処理
+async function editRecord(recordId, data) {
+  try {
+    console.log('Editing record:', { recordId, ...data });
+    // await api.updateRecord(recordId, data);
+    alert('実績が更新されました（仮）');
+    // ページを再読み込みして最新データを表示
+    location.reload();
+  } catch (e) {
+    console.error('Failed to edit record', e);
+    alert('実績の更新に失敗しました');
+  }
+}
+
+// 実績削除処理
+async function deleteRecord(recordId) {
+  try {
+    console.log('Deleting record:', recordId);
+    // await api.deleteRecord(recordId);
+    alert('実績が削除されました（仮）');
+    // ページを再読み込みして最新データを表示
+    location.reload();
+  } catch (e) {
+    console.error('Failed to delete record', e);
+    alert('実績の削除に失敗しました');
+  }
+}
+
+// レコードIDから既存レコードを検索する関数
+function findRecordById(recordId) {
+  // 現在表示されているデータから該当レコードを探す
+  const allRecords = [];
+  const tasks = document.querySelectorAll('.kanban-column');
+  tasks.forEach(taskColumn => {
+    const records = taskColumn.querySelectorAll('.kanban-card');
+    records.forEach(recordCard => {
+      const editBtn = recordCard.querySelector('[data-edit]');
+      if (editBtn && editBtn.dataset.edit === recordId) {
+        // カードの内容を解析して既存データを抽出
+        const rows = recordCard.querySelectorAll('.kanban-card__row');
+        const dateText = rows[0]?.querySelector('.badge')?.textContent || '';
+        const timeText = rows[1]?.textContent || '';
+        const progressTimeText = rows[2]?.textContent || '';
+        const noteElement = recordCard.querySelector('.kanban-card__note');
+        
+        // テキストから値を抽出（簡易版）
+        const progressMatch = progressTimeText.match(/進捗: ([^/]*)/);
+        const timeMatch = progressTimeText.match(/時間: ([^分]*)/);
+        
+        return {
+          start_at: '', // 実際のAPIでは正確な日時データが必要
+          end_at: '',
+          progress_value: progressMatch ? progressMatch[1].trim() : '',
+          work_time: timeMatch ? timeMatch[1].trim() : '',
+          note: noteElement ? noteElement.textContent : ''
+        };
+      }
+    });
+  });
+  
+  // 実際のAPIでは recordId でレコードを取得
+  return {
+    start_at: '',
+    end_at: '',
+    progress_value: '',
+    work_time: '',
+    note: ''
+  };
 }

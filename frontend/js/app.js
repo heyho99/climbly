@@ -5,7 +5,7 @@ import { DashboardView } from './views/dashboard.js';
 import { TasksView } from './views/tasks.js';
 import { TaskFormView } from './views/task_form.js';
 import { RecordsView } from './views/records.js';
-import { RecordsBoardView } from './views/records_board.js';
+import { RecordsBoardView, setupRecordsBoardEvents } from './views/records_board.js';
 
 
 // ナビゲーション(ヘッダやサイドバーの)をレンダリングする関数
@@ -48,6 +48,15 @@ function guard(path) {
   return true;
 }
 
+// 画面描画後に実行される関数
+function onRender() {
+  renderNav();
+  // 実績ボードページの場合、イベントハンドラを設定
+  if (location.hash === '#/records/board') {
+    setupRecordsBoardEvents();
+  }
+}
+
 
 
 // ---実行部分---
@@ -67,7 +76,7 @@ const routes = {
 // ルーターを初期化（ルーター設定の反映、hashchangeイベントリスナーの作成、）
 // hashchangeのイベントリスナーを作成
 // { ルート定義, 毎回の遷移前に実行される関数, 遷移後に実行される関数 }
-initRouter({ routes, beforeEach: guard, onRender: renderNav });
+initRouter({ routes, beforeEach: guard, onRender });
 
 // location.hashが空なら/loginに遷移
 if (!location.hash) {
