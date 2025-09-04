@@ -1,12 +1,11 @@
 import { initRouter, navigateTo } from './router.js';
 import { getToken, clearToken } from './token.js';
-import { LoginView } from './views/login.js';
+import { LoginView, setupLoginEvents } from './views/login.js';
 import { DashboardView } from './views/dashboard.js';
-import { TasksView } from './views/tasks.js';
-import { TaskFormView } from './views/task_form.js';
-import { RecordsView } from './views/records.js';
+import { TasksView, setupTasksEvents } from './views/tasks.js';
+import { TaskFormView, setupTaskFormEvents } from './views/task_form.js';
+import { RecordsView, setupRecordsEvents } from './views/records.js';
 import { RecordsBoardView, setupRecordsBoardEvents } from './views/records_board.js';
-import { setupRecordsEvents } from './views/records.js';
 
 
 // ナビゲーション(ヘッダやサイドバーの)をレンダリングする関数
@@ -52,14 +51,26 @@ function guard(path) {
 // 画面描画後に実行される関数
 function onRender() {
   renderNav();
-  // 実績ボードページの場合、イベントハンドラを設定
-  if (location.hash === '#/records/board') {
+  
+  // 現在のパスを取得
+  const path = location.hash.replace(/^#/, '');
+  
+  // ページ毎のイベントセットアップ
+  // document.addEventListner()だと、このjsファイルがapp.jsでimportされる毎に実行されてしまうが、
+  // 関数ベースのイベントハンドラの設定により、対象のページが読み込まれたときのみにイベントハンドラが設定されるようになる。
+  // しかも、ページを離れた時点でイベントハンドラを解放することもでき安全
+  if (path === '/login') {
+    setupLoginEvents();
+  } else if (path === '/tasks') {
+    setupTasksEvents();
+  } else if (path.startsWith('/tasks/')) {
+    setupTaskFormEvents();
+  } else if (path === '/records') {
+    setupRecordsEvents();
+  } else if (path === '/records/board') {
     setupRecordsBoardEvents();
   }
-  // 実績ページの場合、イベントハンドラを設定
-  if (location.hash === '#/records') {
-    setupRecordsEvents();
-  }
+  // DashboardViewはイベントハンドラなし
 }
 
 

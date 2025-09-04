@@ -94,108 +94,116 @@ function collectForm(form) {
   return { payload, start_date, end_date };
 }
 
+// タスクフォームページのイベントハンドラーを設定する関数
+export function setupTaskFormEvents() {
+  // フォーム送信
+  const taskForm = document.getElementById('task-form');
+  if (taskForm) {
+    taskForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const errBox = document.getElementById('task-error');
+      errBox.style.display = 'none';
+      const mode = e.target.dataset.mode;
+      const id = e.target.dataset.id;
+      const { payload } = collectForm(e.target);
 
-
-document.addEventListener('submit', async (e) => {
-  const form = e.target.closest('#task-form');
-  if (!form) return;
-  e.preventDefault();
-  const errBox = document.getElementById('task-error');
-  errBox.style.display = 'none';
-  const mode = form.dataset.mode;
-  const id = form.dataset.id;
-  const { payload } = collectForm(form);
-
-  try {
-    if (mode === 'edit') {
-      const items = form._planItems || [];
-      const vErr = validateBeforeSubmit(payload, items);
-      if (vErr) throw new Error(vErr);
-      await api.updateTaskWithPlans(id, payload, items);
-    } else {
-      const items = form._planItems || [];
-      // 送信前バリデーション
-      const vErr = validateBeforeSubmit(payload, items);
-      if (vErr) throw new Error(vErr);
-      await api.createTaskWithPlans(payload, items);
-    }
-    navigateTo('/tasks');
-  } catch (err) {
-    errBox.textContent = err.message;
-    errBox.style.display = 'block';
-  }
-});
-
-// 画面描画完了イベントで、編集モードなら初期プレビューとグラフを表示
-window.addEventListener('app:rendered', () => {
-  const form = document.getElementById('task-form');
-  if (!form) return;
-  if (form.dataset.mode !== 'edit') return;
-  if (form._initializedPreview) return;
-  const script = document.getElementById('initial-plans');
-  if (!script) return;
-  let items = [];
-  try { items = JSON.parse(script.textContent || '[]'); } catch {}
-  if (!Array.isArray(items) || items.length === 0) { form._initializedPreview = true; return; }
-  form._planItems = items;
-  const fd = new FormData(form);
-  const target = Number(fd.get('target_time') || 0);
-  renderPreview(items, target);
-  const el = document.getElementById('daily-plan-chart');
-  if (el) {
-    initDailyPlanChart({
-      el,
-      items,
-      onChange(updated) {
-        form._planItems = updated;
-        // 最新の目標時間で再計算表示
-        const fd2 = new FormData(form);
-        const tgt = Number(fd2.get('target_time') || 0);
-        renderPreview(updated, tgt);
-      }
-    });
-  }
-  form._initializedPreview = true;
-});
-
-document.addEventListener('click', (e) => {
-  if (e.target && e.target.id === 'cancel') {
-    e.preventDefault();
-    navigateTo('/tasks');
-  }
-  
-  if (e.target && e.target.id === 'equalize') {
-    e.preventDefault();
-    const form = document.getElementById('task-form');
-    if (!form) return;
-    const { payload, start_date, end_date } = collectForm(form);
-    const errBox = document.getElementById('task-error');
-    errBox.style.display = 'none';
-    const items = buildEqualizedItems(start_date, end_date, Number(payload.target_time||0));
-    if (typeof items === 'string') {
-      // エラーメッセージを返す場合
-      errBox.textContent = items;
-      errBox.style.display = 'block';
-      return;
-    }
-    form._planItems = items; // フォームインスタンスに保持
-    renderPreview(items, Number(payload.target_time||0));
-
-    // ECharts を初期化し、点編集結果をフォームに反映
-    const el = document.getElementById('daily-plan-chart');
-    if (el) {
-      initDailyPlanChart({
-        el,
-        items,
-        onChange(updated) {
-          form._planItems = updated;
-          // 合計表示を更新（テーブルも更新しておく）
-          renderPreview(updated, Number(payload.target_time||0));
+      try {
+        if (mode === 'edit') {
+          const items = e.target._planItems || [];
+          const vErr = validateBeforeSubmit(payload, items);
+          if (vErr) throw new Error(vErr);
+          await api.updateTaskWithPlans(id, payload, items);
+        } else {
+          const items = e.target._planItems || [];
+          // 送信前バリデーション
+          const vErr = validateBeforeSubmit(payload, items);
+          if (vErr) throw new Error(vErr);
+          await api.createTaskWithPlans(payload, items);
         }
-      });
+        navigateTo('/tasks');
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = 'block';
+      }
+    };
+  }
+
+  // キャンセルボタン
+  const cancelBtn = document.getElementById('cancel');
+  if (cancelBtn) {
+    cancelBtn.onclick = (e) => {
+      e.preventDefault();
+      navigateTo('/tasks');
+    };
+  }
+
+  // 均等配分ボタン
+  const equalizeBtn = document.getElementById('equalize');
+  if (equalizeBtn) {
+    equalizeBtn.onclick = (e) => {
+      e.preventDefault();
+      const form = document.getElementById('task-form');
+      if (!form) return;
+      const { payload, start_date, end_date } = collectForm(form);
+      const errBox = document.getElementById('task-error');
+      errBox.style.display = 'none';
+      const items = buildEqualizedItems(start_date, end_date, Number(payload.target_time||0));
+      if (typeof items === 'string') {
+        // エラーメッセージを返す場合
+        errBox.textContent = items;
+        errBox.style.display = 'block';
+        return;
+      }
+      form._planItems = items; // フォームインスタンスに保持
+      renderPreview(items, Number(payload.target_time||0));
+
+      // ECharts を初期化し、点編集結果をフォームに反映
+      const el = document.getElementById('daily-plan-chart');
+      if (el) {
+        initDailyPlanChart({
+          el,
+          items,
+          onChange(updated) {
+            form._planItems = updated;
+            // 合計表示を更新（テーブルも更新しておく）
+            renderPreview(updated, Number(payload.target_time||0));
+          }
+        });
+      }
+    };
+  }
+
+  // 編集モード時の初期化
+  const form = document.getElementById('task-form');
+  if (form && form.dataset.mode === 'edit' && !form._initializedPreview) {
+    const script = document.getElementById('initial-plans');
+    if (script) {
+      let items = [];
+      try { items = JSON.parse(script.textContent || '[]'); } catch {}
+      if (Array.isArray(items) && items.length > 0) {
+        form._planItems = items;
+        const fd = new FormData(form);
+        const target = Number(fd.get('target_time') || 0);
+        renderPreview(items, target);
+        const el = document.getElementById('daily-plan-chart');
+        if (el) {
+          initDailyPlanChart({
+            el,
+            items,
+            onChange(updated) {
+              form._planItems = updated;
+              // 最新の目標時間で再計算表示
+              const fd2 = new FormData(form);
+              const tgt = Number(fd2.get('target_time') || 0);
+              renderPreview(updated, tgt);
+            }
+          });
+        }
+      }
+      form._initializedPreview = true;
     }
   }
-});
+}
 
 // 均等配分で日次計画を作成
 function buildEqualizedItems(start_date, end_date, target_time) {

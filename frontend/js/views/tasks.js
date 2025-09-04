@@ -33,17 +33,44 @@ export async function TasksView() {
   </div>`;
 }
 
-document.addEventListener('click', async (e) => {
-  if (e.target && e.target.id === 'btn-new-task') {
-    e.preventDefault();
-    navigateTo('/tasks/new');
+// タスクページのイベントハンドラーを設定する関数
+export function setupTasksEvents() {
+  // 新規作成ボタン
+  const newTaskBtn = document.getElementById('btn-new-task');
+  if (newTaskBtn) {
+    newTaskBtn.onclick = (e) => {
+      e.preventDefault();
+      navigateTo('/tasks/new');
+    };
   }
-  const editId = e.target && e.target.getAttribute && e.target.getAttribute('data-edit-task');
-  if (editId) { navigateTo(`/tasks/${editId}`); }
 
-  const delId = e.target && e.target.getAttribute && e.target.getAttribute('data-del-task');
-  if (delId) {
-    if (!confirm('削除しますか？')) return;
-    try { await api.deleteTask(delId); location.reload(); } catch (err) { alert(err.message); }
-  }
-});
+  // 編集ボタン
+  document.querySelectorAll('[data-edit-task]').forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const editId = e.target.getAttribute('data-edit-task');
+      if (editId) {
+        navigateTo(`/tasks/${editId}`);
+      }
+    };
+  });
+
+  // 削除ボタン
+  document.querySelectorAll('[data-del-task]').forEach(btn => {
+    btn.onclick = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const delId = e.target.getAttribute('data-del-task');
+      if (delId) {
+        if (!confirm('削除しますか？')) return;
+        try { 
+          await api.deleteTask(delId); 
+          location.reload(); 
+        } catch (err) { 
+          alert(err.message); 
+        }
+      }
+    };
+  });
+}

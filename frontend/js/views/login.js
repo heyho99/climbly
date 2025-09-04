@@ -20,31 +20,35 @@ export function LoginView() {
   </div>`;
 }
 
-document.addEventListener('submit', async (e) => {
-  const form = e.target.closest('#login-form');
-  if (!form) return;
-  e.preventDefault();
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value;
-  const errBox = document.getElementById('login-error');
-  errBox.style.display = 'none';
-  try {
-    await login(username, password);
-    navigateTo('/dashboard');
-  } catch (err) {
-    errBox.textContent = err.message;
-    errBox.style.display = 'block';
+// ログインページのイベントハンドラーを設定する関数
+export function setupLoginEvents() {
+  // ログインフォーム
+  const loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const errBox = document.getElementById('login-error');
+      errBox.style.display = 'none';
+      try {
+        await login(username, password);
+        navigateTo('/dashboard');
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = 'block';
+      }
+    };
   }
-});
 
-
-// e.target：イベントが発火したDOM要素（一番内側の）
-// documentはindex.htmlを指すので、if文でtargetを指定してあげれば、再バインドせずにそれぞれのDOMにイベントリスナーを作成できる
-document.addEventListener('click', (e) => {
-  if (e.target && e.target.id === 'goto-demo') {
-    console.log('goto-demo clicked');
-    e.preventDefault();
-    // 簡易デモ: 既知のダミー資格情報を試す or ダッシュボードへ遷移（トークン無し）
-    navigateTo('/dashboard');
+  // デモボタン
+  const gotoDemoBtn = document.getElementById('goto-demo');
+  if (gotoDemoBtn) {
+    gotoDemoBtn.onclick = (e) => {
+      console.log('goto-demo clicked');
+      e.preventDefault();
+      // 簡易デモ: 既知のダミー資格情報を試す or ダッシュボードへ遷移（トークン無し）
+      navigateTo('/dashboard');
+    };
   }
-});
+}
