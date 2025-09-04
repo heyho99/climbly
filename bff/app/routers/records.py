@@ -24,31 +24,85 @@ async def list_records_by_task(
     to: Optional[str] = None,
     auth_header: dict = Depends(get_auth_header),
 ):
-    """タスク別実績一覧をrecord-serviceから取得"""
-    params = {}
-    if task_id is not None:
-        params["task_id"] = task_id
-    if from_ is not None:
-        params["from"] = from_
-    if to is not None:
-        params["to"] = to
-
+    """タスク別実績一覧をrecord-serviceから取得し、全タスクとマージ"""
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            # 1. 全タスクを取得
+            tasks_response = await client.get(
+                "http://task-service/v1/tasks",
+                params={"mine": "true"},
+                headers=auth_header,
+                timeout=30.0
+            )
+            if tasks_response.status_code != 200:
+                raise HTTPException(
+                    status_code=tasks_response.status_code,
+                    detail={"message": "task service error"}
+                )
+            all_tasks = tasks_response.json()
+            
+            # 2. 実績データを取得
+            params = {}
+            if task_id is not None:
+                params["task_id"] = task_id
+            if from_ is not None:
+                params["from"] = from_
+            if to is not None:
+                params["to"] = to
+                
+            records_response = await client.get(
                 f"{RECORD_SVC_BASE}/records/by_task",
                 params=params,
                 headers=auth_header,
                 timeout=30.0
             )
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=response.json() if response.headers.get("content-type") == "application/json" else {"message": "record service error"}
-                )
-            return response.json()
+            
+            # 実績データの取得に失敗した場合は空の実績として扱う
+            if records_response.status_code == 200:
+                records_data = records_response.json()
+                tasks_with_records = {t["task_id"]: t for t in records_data.get("tasks", [])}
+            else:
+                tasks_with_records = {}
+            
+            # 3. 全タスクと実績をマージ
+            merged_tasks = []
+            for task in all_tasks:
+                current_task_id = task["task_id"]
+                
+                # task_idでフィルタリング（指定されている場合）
+                if task_id is not None and task_id != current_task_id:
+                    continue
+                    
+                if current_task_id in tasks_with_records:
+                    # 実績があるタスク
+                    task_with_records = tasks_with_records[current_task_id]
+                    merged_tasks.append({
+                        "task_id": task["task_id"],
+                        "task_title": task["task_name"],
+                        "assignees": [],
+                        "records": task_with_records["records"]
+                    })
+                else:
+                    # 実績がないタスク
+                    merged_tasks.append({
+                        "task_id": task["task_id"],
+                        "task_title": task["task_name"],
+                        "assignees": [],
+                        "records": []
+                    })
+            
+            total_records = sum(len(t["records"]) for t in merged_tasks)
+            
+            return {
+                "from": from_,
+                "to": to,
+                "tasks": merged_tasks,
+                "total_tasks": len(merged_tasks),
+                "total_records": total_records,
+            }
+            
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail={"message": "record service unavailable", "error": str(e)})
+        raise HTTPException(status_code=503, detail={"message": "service unavailable", "error": str(e)})
 
 
 @router.get("/records/diary")

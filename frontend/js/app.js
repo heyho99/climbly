@@ -6,6 +6,7 @@ import { TasksView } from './views/tasks.js';
 import { TaskFormView } from './views/task_form.js';
 import { RecordsView } from './views/records.js';
 import { RecordsBoardView, setupRecordsBoardEvents } from './views/records_board.js';
+import { setupRecordsEvents } from './views/records.js';
 
 
 // ナビゲーション(ヘッダやサイドバーの)をレンダリングする関数
@@ -54,6 +55,10 @@ function onRender() {
   // 実績ボードページの場合、イベントハンドラを設定
   if (location.hash === '#/records/board') {
     setupRecordsBoardEvents();
+  }
+  // 実績ページの場合、イベントハンドラを設定
+  if (location.hash === '#/records') {
+    setupRecordsEvents();
   }
 }
 

@@ -1,5 +1,18 @@
 import { api } from '../api.js';
 
+// UTC日時をローカルタイムゾーンでdatetime-local形式に変換
+function formatDateForInput(utcDateString) {
+  const date = new Date(utcDateString);
+  // ローカルタイムゾーンでの年月日時分を取得
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export async function RecordsView() {
   let data = { items: [] };
   try { data = await api.listRecords({ page:1, per_page:50 }); } catch {}
@@ -9,7 +22,7 @@ export async function RecordsView() {
   <div class="card">
     <h2>実績記録</h2>
     <table class="table">
-      <thead><tr><th>タスク</th><th>開始</th><th>終了</th><th>進捗</th><th>作業時間(分)</th></tr></thead>
+      <thead><tr><th>タスク</th><th>開始</th><th>終了</th><th>進捗</th><th>作業時間(分)</th><th>操作</th></tr></thead>
       <tbody>
         ${items.map(r => `
           <tr>
@@ -18,12 +31,81 @@ export async function RecordsView() {
             <td>${r.end_at ? new Date(r.end_at).toLocaleString() : ''}</td>
             <td>${r.progress_value ?? ''}</td>
             <td>${r.work_time ?? ''}</td>
+            <td>
+              <button class="btn btn-xs" data-edit-record="${r.record_work_id || r.id}">編集</button>
+              <button class="btn btn-xs btn-danger" data-del-record="${r.record_work_id || r.id}">削除</button>
+            </td>
           </tr>
         `).join('')}
       </tbody>
     </table>
     ${!items.length ? '<div class="helper">記録がありません</div>' : ''}
+    <div id="modal-root"></div>
   </div>`;
+}
+
+// 実績ページのイベントハンドラーを設定する関数
+export function setupRecordsEvents() {
+  // 編集ボタン
+  document.querySelectorAll('[data-edit-record]').forEach(btn => {
+    btn.onclick = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const recordId = e.target.dataset.editRecord;
+      
+      try {
+        // APIから既存レコードの情報を取得
+        const existingRecord = await api.getRecord(recordId);
+        showRecordFormModal({ 
+          mode: 'edit', 
+          recordId,
+          record: existingRecord,
+          onSubmit: (data) => editRecord(recordId, data) 
+        });
+      } catch (error) {
+        console.error('Failed to fetch record:', error);
+        alert('実績データの取得に失敗しました: ' + error.message);
+      }
+    };
+  });
+
+  // 削除ボタン
+  document.querySelectorAll('[data-del-record]').forEach(btn => {
+    btn.onclick = (e) => {
+      const recordId = e.target.dataset.delRecord;
+      showDeleteConfirmModal({ 
+        onConfirm: () => deleteRecord(recordId) 
+      });
+    };
+  });
+}
+
+// 実績編集処理
+async function editRecord(recordId, data) {
+  try {
+    await api.updateRecord(recordId, data);
+    alert('実績が更新されました');
+    // ページを再描画（リロードの代わりに現在のページを再レンダリング）
+    const currentPath = location.hash.replace(/^#/, '');
+    location.hash = '#' + currentPath; // ルーターのhashchangeをトリガー
+  } catch (e) {
+    console.error('Failed to edit record', e);
+    alert('実績の更新に失敗しました: ' + e.message);
+  }
+}
+
+// 実績削除処理
+async function deleteRecord(recordId) {
+  try {
+    await api.deleteRecord(recordId);
+    alert('実績が削除されました');
+    // ページを再描画（リロードの代わりに現在のページを再レンダリング）
+    const currentPath = location.hash.replace(/^#/, '');
+    location.hash = '#' + currentPath; // ルーターのhashchangeをトリガー
+  } catch (e) {
+    console.error('Failed to delete record', e);
+    alert('実績の削除に失敗しました: ' + e.message);
+  }
 }
 
 // 実績追加・編集用モーダル
@@ -41,11 +123,11 @@ export function showRecordFormModal({ mode, taskId, recordId, record = {}, onSub
         <form id="record-form">
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">開始日時</label>
-            <input type="datetime-local" name="start_at" value="${record.start_at ? new Date(record.start_at).toISOString().slice(0,16) : ''}" required style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
+            <input type="datetime-local" name="start_at" value="${record.start_at ? formatDateForInput(record.start_at) : ''}" required style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">終了日時</label>
-            <input type="datetime-local" name="end_at" value="${record.end_at ? new Date(record.end_at).toISOString().slice(0,16) : ''}" required style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
+            <input type="datetime-local" name="end_at" value="${record.end_at ? formatDateForInput(record.end_at) : ''}" required style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">進捗値</label>
@@ -71,9 +153,14 @@ export function showRecordFormModal({ mode, taskId, recordId, record = {}, onSub
   document.getElementById('record-form').onsubmit = (e) => {
     e.preventDefault();
     const form = e.target;
+    
+    // datetime-localの値をタイムゾーン付きISO文字列に変換
+    const startDate = new Date(form.start_at.value);
+    const endDate = new Date(form.end_at.value);
+    
     const data = {
-      start_at: form.start_at.value,
-      end_at: form.end_at.value,
+      start_at: startDate.toISOString(), // UTC形式で送信
+      end_at: endDate.toISOString(),     // UTC形式で送信
       progress_value: form.progress_value.value ? Number(form.progress_value.value) : null,
       work_time: form.work_time.value ? Number(form.work_time.value) : null,
       note: form.note.value.trim() || null,
