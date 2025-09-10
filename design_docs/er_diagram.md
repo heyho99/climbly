@@ -37,6 +37,7 @@ erDiagram
         varchar category "study/creation/other"
         int target_time
         text comment
+        varchar status "active/completed/paused/cancelled"
         int last_updated_user FK
         timestamptz created_at
         timestamptz updated_at
