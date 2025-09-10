@@ -223,14 +223,24 @@ function buildEqualizedItems(start_date, end_date, target_time) {
   let remT = target_time - baseT * days;
 
   const items = [];
+  let cumulativeWork = 0; // 累積作業計画値
+
   for (let i = 0; i < days; i++) {
     const d = new Date(sd.getTime() + i * 24*3600*1000);
     const dateStr = d.toISOString().slice(0,10);
-    const w = baseW + (remW > 0 ? 1 : 0);
+    
+    // 各日の作業増分を計算（余りの配分も考慮）
+    const dailyWorkIncrement = baseW + (remW > 0 ? 1 : 0);
     if (remW > 0) remW--;
+    
+    // 累積値として設定
+    cumulativeWork += dailyWorkIncrement;
+    
+    // 時間計画値は従来通り日次値
     const t = baseT + (remT > 0 ? 1 : 0);
     if (remT > 0) remT--;
-    items.push({ target_date: dateStr, work_plan_value: w, time_plan_value: t });
+    
+    items.push({ target_date: dateStr, work_plan_value: cumulativeWork, time_plan_value: t });
   }
   return items;
 }
@@ -240,10 +250,16 @@ function renderPreview(items, target_time) {
   const tbody = document.querySelector('#preview-table tbody');
   const sumBox = document.getElementById('preview-sum');
   if (!p || !tbody || !sumBox) return;
-  tbody.innerHTML = items.map(it => `<tr><td>${it.target_date}</td><td style="text-align:right;">${it.work_plan_value}</td><td style="text-align:right;">${it.time_plan_value}</td></tr>`).join('');
-  const sumW = items.reduce((a,b)=>a+Number(b.work_plan_value||0),0);
+  tbody.innerHTML = items.map(it => `<tr><td>${it.target_date}</td><td style="text-align:right;">${it.work_plan_value}%</td><td style="text-align:right;">${it.time_plan_value}h</td></tr>`).join('');
+  
+  // 時間の合計計算
   const sumT = items.reduce((a,b)=>a+Number(b.time_plan_value||0),0);
-  sumBox.textContent = `合計: 作業 ${sumW}% / 時間 ${sumT}（目標 ${target_time}）`;
+  
+  // 作業計画値は累積値なので、最終日の値が最終進捗
+  const sortedItems = [...items].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+  const finalWorkValue = sortedItems[sortedItems.length - 1]?.work_plan_value || 0;
+  
+  sumBox.textContent = `合計: 作業 ${finalWorkValue}% / 時間 ${sumT}h（目標 ${target_time}h）`;
   p.style.display = 'block';
 }
 
@@ -255,10 +271,15 @@ function validateBeforeSubmit(payload, items) {
   if (ed < sd) return '終了日は開始日以降である必要があります。';
   if (payload.target_time < 0) return '目標時間は0以上を指定してください。';
   if (!items || items.length === 0) return '均等配分を押して日次計画を作成してください。';
+  
   // 合計チェック
-  const sumW = items.reduce((a,b)=>a+Number(b.work_plan_value||0),0);
   const sumT = items.reduce((a,b)=>a+Number(b.time_plan_value||0),0);
-  if (sumW !== 100) return '作業(%)の合計が100になっていません。';
+  
+  // 作業計画値は累積値なので、最終日の値が100%であることを確認
+  const sortedItems = [...items].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
+  const finalWorkValue = sortedItems[sortedItems.length - 1]?.work_plan_value || 0;
+  
+  if (finalWorkValue !== 100) return '作業計画の最終累積値が100%になっていません。';
   if (sumT !== Number(payload.target_time||0)) return '時間の合計が目標時間と一致していません。';
   return '';
 }

@@ -297,16 +297,16 @@ def put_daily_plans_bulk(
                     raise HTTPException(status_code=404, detail={"message": "task not found"})
                 target_time = int(r[0])
 
-                # 合計検証
-                sum_work = sum(i.work_plan_value for i in items)
+                # 合計検証 - work_plan_valueは累積値なので最大値が100であることを確認
+                max_work = max(i.work_plan_value for i in items) if items else 0
                 sum_time = sum(i.time_plan_value for i in items)
-                if sum_work != 100 or sum_time != target_time:
+                if max_work != 100 or sum_time != target_time:
                     conn.rollback()
                     raise HTTPException(
                         status_code=400,
                         detail={
                             "message": "invalid plan sum",
-                            "details": {"sum_work": sum_work, "sum_time": sum_time, "target_time": target_time},
+                            "details": {"max_work": max_work, "sum_time": sum_time, "target_time": target_time},
                         },
                     )
 

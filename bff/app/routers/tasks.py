@@ -116,11 +116,13 @@ def create_task_with_plans(payload: Dict[str, Any], request: Request):
         raise HTTPException(status_code=400, detail={"message": "task and daily_plans.items are required"})
 
     # 軽量検証: 合計チェック（不整合なら task-service を呼ばない）
-    sum_work = sum(int(x.get("work_plan_value", 0)) for x in items)
     sum_time = sum(int(x.get("time_plan_value", 0)) for x in items)
     target_time = int(task_body.get("target_time", 0))
-    if sum_work != 100:
-        raise HTTPException(status_code=400, detail={"message": "sum(work_plan_value) must be 100"})
+    
+    # work_plan_value は累積値なので、最大値が100であることを確認
+    max_work = max(int(x.get("work_plan_value", 0)) for x in items) if items else 0
+    if max_work != 100:
+        raise HTTPException(status_code=400, detail={"message": "max(work_plan_value) must be 100 (cumulative)"})
     if sum_time != target_time:
         raise HTTPException(status_code=400, detail={"message": "sum(time_plan_value) must equal task.target_time"})
 
@@ -198,11 +200,13 @@ def update_task_with_plans(task_id: int, payload: Dict[str, Any], request: Reque
 
             # 2.5) 軽量検証（合計チェック）。target_time は更新後の値で評価
             try:
-                sum_work = sum(int(x.get("work_plan_value", 0)) for x in items)
                 sum_time = sum(int(x.get("time_plan_value", 0)) for x in items)
                 tgt_time = int(updated_task.get("target_time", 0))
-                if sum_work != 100:
-                    raise HTTPException(status_code=400, detail={"message": "sum(work_plan_value) must be 100"})
+                
+                # work_plan_value は累積値なので、最大値が100であることを確認
+                max_work = max(int(x.get("work_plan_value", 0)) for x in items) if items else 0
+                if max_work != 100:
+                    raise HTTPException(status_code=400, detail={"message": "max(work_plan_value) must be 100 (cumulative)"})
                 if sum_time != tgt_time:
                     raise HTTPException(status_code=400, detail={"message": "sum(time_plan_value) must equal task.target_time"})
             except ValueError:

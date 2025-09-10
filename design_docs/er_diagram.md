@@ -32,8 +32,8 @@ erDiagram
         int created_by FK "user_id"
         varchar task_name
         text task_content
-        timestamptz start_at "日時に対応"
-        timestamptz end_at "日時に対応"
+        timestamptz start_at "開始予定日時"
+        timestamptz end_at "終了予定日時"
         varchar category "study/creation/other"
         int target_time
         text comment
@@ -48,8 +48,8 @@ erDiagram
         int created_by FK "実績入力した人"
         timestamptz start_at "日時に対応(日をまたぐ場合は別々に作成)"
         timestamptz end_at "日時に対応(日をまたぐ場合は別々に作成)"
-        int progress_value "進捗値(0-100)"
-        int work_time "作業時間を別に設定できるようにする"
+        int progress_value "進捗値(0-100),累積値"
+        int work_time "作業時間は日毎の時間を入力"
         text note "作業メモ"
         int last_updated_user FK
         timestamptz created_at
@@ -61,8 +61,8 @@ erDiagram
         int task_id FK
         int created_by FK
         date target_date "カレンダー連携必要無いのでdate"
-        int work_plan_value "整数値で計算簡単に"
-        int time_plan_value "整数値で計算簡単に"
+        int work_plan_value "整数値,作業予定値(0-100),累積値"
+        int time_plan_value "整数値,作業時間予定は日毎の時間を入力"
         int last_updated_user FK
         timestamptz created_at
         timestamptz updated_at
@@ -75,8 +75,8 @@ erDiagram
         varchar subtask_name
         text subtask_content
         varchar status "to Do/Doing/Done"
-        timestamptz start_at
-        timestamptz end_at
+        timestamptz start_at "開始予定日時"
+        timestamptz end_at "終了予定日時"
         text comment
         int last_updated_user FK
         timestamptz created_at
