@@ -8,20 +8,33 @@ export async function TasksView() {
   try { data = await api.listTasks({ page: 1, per_page: 50 }); } catch {}
   const items = Array.isArray(data) ? data : (data.items || []);
 
+  // ステータス表示用の関数
+  const getStatusBadge = (status) => {
+    const statusMap = {
+      'active': '<span class="badge badge-success">アクティブ</span>',
+      'completed': '<span class="badge badge-info">完了</span>',
+      'paused': '<span class="badge badge-warning">一時停止</span>',
+      'cancelled': '<span class="badge badge-danger">キャンセル</span>'
+    };
+    return statusMap[status] || '<span class="badge badge-secondary">不明</span>';
+  };
+
   return `
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h2>タスク一覧</h2>
       <button class="btn" id="btn-new-task">新規作成</button>
     </div>
+    
     <table class="table">
-      <thead><tr><th>名称</th><th>期間</th><th>カテゴリ</th><th>目標時間</th><th></th></tr></thead>
+      <thead><tr><th>名称</th><th>期間</th><th>カテゴリ</th><th>ステータス</th><th>目標時間</th><th></th></tr></thead>
       <tbody>
         ${items.map(t => `
           <tr>
             <td>${t.task_name}</td>
             <td>${t.start_at ? new Date(t.start_at).toLocaleDateString() : ''} - ${t.end_at ? new Date(t.end_at).toLocaleDateString() : ''}</td>
             <td>${t.category || ''}</td>
+            <td>${getStatusBadge(t.status)}</td>
             <td>${t.target_time ?? ''}</td>
             <td><button class="btn secondary" data-edit-task="${t.task_id}">編集</button>
                 <button class="btn danger" data-del-task="${t.task_id}">削除</button></td>

@@ -11,6 +11,7 @@ class TaskIn(BaseModel):
     category: str = Field(pattern=r"^(study|creation|other)$")
     target_time: int = Field(ge=0)
     comment: Optional[str] = None
+    status: str = Field(default="active", pattern=r"^(active|completed|paused|cancelled)$")
 
 
 class TaskUpdate(BaseModel):
@@ -21,6 +22,7 @@ class TaskUpdate(BaseModel):
     category: Optional[str] = Field(default=None, pattern=r"^(study|creation|other)$")
     target_time: Optional[int] = Field(default=None, ge=0)
     comment: Optional[str] = None
+    status: Optional[str] = Field(default=None, pattern=r"^(active|completed|paused|cancelled)$")
 
 
 class TaskOut(BaseModel):
@@ -33,6 +35,7 @@ class TaskOut(BaseModel):
     category: str
     target_time: int
     comment: Optional[str]
+    status: str
     created_at: datetime
     updated_at: datetime
 

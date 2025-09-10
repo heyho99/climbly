@@ -16,7 +16,7 @@ export async function TaskFormView({ mode, id }) {
     } catch {}
   }
 
-  const initial = task || { task_name:'', task_content:'', category:'study', start_at:'', end_at:'', target_time:0, comment:'' };
+  const initial = task || { task_name:'', task_content:'', category:'study', start_at:'', end_at:'', target_time:0, comment:'', status:'active' };
 
   return `
   <div class="card">
@@ -33,6 +33,17 @@ export async function TaskFormView({ mode, id }) {
             ${['study','creation','other'].map(c => `<option value="${c}" ${initial.category===c?'selected':''}>${c}</option>`).join('')}
           </select>
         </div>
+        <div class="col">
+          <label>ステータス</label>
+          <select name="status">
+            <option value="active" ${initial.status==='active'?'selected':''}>アクティブ</option>
+            <option value="completed" ${initial.status==='completed'?'selected':''}>完了</option>
+            <option value="paused" ${initial.status==='paused'?'selected':''}>一時停止</option>
+            <option value="cancelled" ${initial.status==='cancelled'?'selected':''}>キャンセル</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
         <div class="col">
           <label>開始日</label>
           <input type="date" name="start_date" value="${initial.start_at ? toDate(initial.start_at) : ''}" />
@@ -86,6 +97,7 @@ function collectForm(form) {
     task_name: fd.get('task_name'),
     task_content: fd.get('task_content') || '',
     category: fd.get('category') || 'other',
+    status: fd.get('status') || 'active',
     start_at: start_date ? new Date(start_date).toISOString() : null,
     end_at: end_date ? new Date(end_date).toISOString() : null,
     target_time: Number(fd.get('target_time') || 0),

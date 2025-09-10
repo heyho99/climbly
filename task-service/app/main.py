@@ -66,11 +66,12 @@ def healthz():
 def list_tasks(
     mine: bool = Query(default=True),
     category: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None, regex="^(active|completed|paused|cancelled)$"),
     current_user_id: int = Depends(get_current_user_id),
 ):
     query = (
         "SELECT task_id, created_by, task_name, task_content, start_at, end_at, "
-        "category, target_time, comment, created_at, updated_at FROM tasks"
+        "category, target_time, comment, status, created_at, updated_at FROM tasks"
     )
     params: List = []
     where = []
@@ -80,6 +81,9 @@ def list_tasks(
     if category is not None:
         where.append("category=%s")
         params.append(category)
+    if status is not None:
+        where.append("status=%s")
+        params.append(status)
     if where:
         query += " WHERE " + " AND ".join(where)
     query += " ORDER BY task_id DESC"
@@ -99,8 +103,9 @@ def list_tasks(
                     category=r[6],
                     target_time=r[7],
                     comment=r[8],
-                    created_at=r[9],
-                    updated_at=r[10],
+                    status=r[9],
+                    created_at=r[10],
+                    updated_at=r[11],
                 )
                 for r in rows
             ]
@@ -112,9 +117,9 @@ def create_task(req: TaskIn, current_user_id: int = Depends(get_current_user_id)
         with conn.cursor() as cur:
             cur.execute(
                 (
-                    "INSERT INTO tasks (created_by, task_name, task_content, start_at, end_at, category, target_time, comment) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
-                    "RETURNING task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, created_at, updated_at"
+                    "INSERT INTO tasks (created_by, task_name, task_content, start_at, end_at, category, target_time, comment, status) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "RETURNING task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, status, created_at, updated_at"
                 ),
                 (
                     current_user_id,
@@ -125,6 +130,7 @@ def create_task(req: TaskIn, current_user_id: int = Depends(get_current_user_id)
                     req.category,
                     req.target_time,
                     req.comment,
+                    req.status,
                 ),
             )
             r = cur.fetchone()
@@ -138,8 +144,9 @@ def create_task(req: TaskIn, current_user_id: int = Depends(get_current_user_id)
                 category=r[6],
                 target_time=r[7],
                 comment=r[8],
-                created_at=r[9],
-                updated_at=r[10],
+                status=r[9],
+                created_at=r[10],
+                updated_at=r[11],
             )
 
 
@@ -149,7 +156,7 @@ def get_task(task_id: int, current_user_id: int = Depends(get_current_user_id)):
         with conn.cursor() as cur:
             cur.execute(
                 (
-                    "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, created_at, updated_at "
+                    "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, status, created_at, updated_at "
                     "FROM tasks WHERE task_id=%s AND created_by=%s"
                 ),
                 (task_id, current_user_id),
@@ -167,8 +174,9 @@ def get_task(task_id: int, current_user_id: int = Depends(get_current_user_id)):
                 category=r[6],
                 target_time=r[7],
                 comment=r[8],
-                created_at=r[9],
-                updated_at=r[10],
+                status=r[9],
+                created_at=r[10],
+                updated_at=r[11],
             )
 
 
@@ -184,6 +192,7 @@ def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(ge
         ("category", req.category),
         ("target_time", req.target_time),
         ("comment", req.comment),
+        ("status", req.status),
     ):
         if val is not None:
             fields.append(f"{col}=%s")
@@ -202,7 +211,7 @@ def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(ge
                 raise HTTPException(status_code=404, detail={"message": "task not found"})
             cur.execute(
                 (
-                    "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, created_at, updated_at "
+                    "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, status, created_at, updated_at "
                     "FROM tasks WHERE task_id=%s AND created_by=%s"
                 ),
                 (task_id, current_user_id),
@@ -218,8 +227,9 @@ def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(ge
                 category=r[6],
                 target_time=r[7],
                 comment=r[8],
-                created_at=r[9],
-                updated_at=r[10],
+                status=r[9],
+                created_at=r[10],
+                updated_at=r[11],
             )
 
 

@@ -16,11 +16,13 @@ def _forward_auth_headers(request: Request) -> dict:
 
 
 @router.get("/tasks")
-def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional[str] = None, page: int = 1, per_page: int = 50):
+def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional[str] = None, status: Optional[str] = None, page: int = 1, per_page: int = 50):
     # v1: task-service への単純委譲（ページングは後続拡張でBFF側対応）
     params = {"mine": mine}
     if category is not None:
         params["category"] = category
+    if status is not None:
+        params["status"] = status
     try:
         with httpx.Client(timeout=10.0) as client:
             resp = client.get(f"{TASK_SVC_BASE}/tasks", params=params, headers=_forward_auth_headers(request))
