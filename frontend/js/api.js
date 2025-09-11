@@ -20,6 +20,7 @@ async function request(path, { method='GET', body, headers={} } = {}) {
 }
 
 // 未定義/空値を除外してクエリ文字列を生成
+// 例: toQuery({ a:1, b:null, c:'', d:0 }) => '?a=1&d=0'
 function toQuery(params = {}) {
   const cleaned = Object.fromEntries(
     Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
@@ -42,8 +43,8 @@ export const api = {
 
   // Tasks
   async listTasks(params={}) {
-    const qs = toQuery({ mine:'true', ...params });
-    return request(`/tasks${qs}`);
+    const qs = toQuery({ mine:'true', ...params }); // デフォルトで自分のタスクのみ取得
+    return request(`/tasks${qs}`); // /tasks?mine=true&page=1&per_page=50
   },
   async getTask(task_id) { return request(`/tasks/${task_id}`); },
   // async createTask(payload) { return request('/tasks', { method:'POST', body: payload }); },
