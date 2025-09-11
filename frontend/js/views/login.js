@@ -10,9 +10,12 @@ export function LoginView() {
       <input type="text" id="username" placeholder="username or email" required />
       <label>パスワード</label>
       <input type="password" id="password" placeholder="••••••••" required />
-      <div style="margin-top:12px; display:flex; gap:8px;">
-        <button class="btn" type="submit">ログイン</button>
-        <button class="btn secondary" type="button" id="goto-demo">デモへ</button>
+      <div style="margin-top:12px;">
+        <button class="btn" type="submit" style="width: 100%;">ログイン</button>
+      </div>
+      <div style="margin-top:16px; text-align:center;">
+        <span class="helper">アカウントをお持ちでない方は </span>
+        <button class="btn secondary" type="button" id="goto-register">新規登録</button>
       </div>
       <div class="helper">初回はバックエンドが未起動だと失敗します。BFFを起動してください。</div>
       <div id="login-error" class="alert" style="display:none; margin-top:8px;"></div>
@@ -41,14 +44,12 @@ export function setupLoginEvents() {
     };
   }
 
-  // デモボタン
-  const gotoDemoBtn = document.getElementById('goto-demo');
-  if (gotoDemoBtn) {
-    gotoDemoBtn.onclick = (e) => {
-      console.log('goto-demo clicked');
+  // 新規登録ボタン
+  const gotoRegisterBtn = document.getElementById('goto-register');
+  if (gotoRegisterBtn) {
+    gotoRegisterBtn.onclick = (e) => {
       e.preventDefault();
-      // 簡易デモ: 既知のダミー資格情報を試す or ダッシュボードへ遷移（トークン無し）
-      navigateTo('/dashboard');
+      navigateTo('/register');
     };
   }
 }

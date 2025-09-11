@@ -1,6 +1,7 @@
 import { initRouter, navigateTo } from './router.js';
 import { getToken, clearToken } from './token.js';
 import { LoginView, setupLoginEvents } from './views/login.js';
+import { RegisterView, setupRegisterEvents } from './views/register.js';
 import { DashboardView } from './views/dashboard.js';
 import { TasksView, setupTasksEvents } from './views/tasks.js';
 import { TaskFormView, setupTaskFormEvents } from './views/task_form.js';
@@ -20,6 +21,7 @@ function renderNav() {
     <a href="#/login" id="logout-link" data-link>ログアウト</a>
   ` : `
     <a href="#/login" data-link>ログイン</a>
+    <a href="#/register" data-link>新規登録</a>
   `;
 
   const logout = document.getElementById('logout-link');
@@ -35,13 +37,13 @@ function renderNav() {
 // ガード：画面遷移直前に実行されるログイン判定（ログイン有無はトークンで判断）
 function guard(path) {
   const authed = !!getToken(); // !!で値をboolに変換
-  // 未認証でログインページ以外にアクセスしたら、ログインページへリダイレクト
-  if (!authed && path !== '/login') {  
+  // 未認証でログインページや登録ページ以外にアクセスしたら、ログインページへリダイレクト
+  if (!authed && path !== '/login' && path !== '/register') {  
     navigateTo('/login');
     return false;
   }
-  // 認証済みでログインページにアクセスしたら、ダッシュボードへリダイレクト
-  if (authed && path === '/login') {  
+  // 認証済みでログインページや登録ページにアクセスしたら、ダッシュボードへリダイレクト
+  if (authed && (path === '/login' || path === '/register')) {  
     navigateTo('/dashboard');
     return false;
   }
@@ -61,6 +63,8 @@ function onRender() {
   // しかも、ページを離れた時点でイベントハンドラを解放することもでき安全
   if (path === '/login') {
     setupLoginEvents();
+  } else if (path === '/register') {
+    setupRegisterEvents();
   } else if (path === '/tasks') {
     setupTasksEvents();
   } else if (path.startsWith('/tasks/')) {
@@ -81,6 +85,7 @@ function onRender() {
 // ビューのルーティングの対応表（ルート定義）
 const routes = {
   '/login': LoginView,
+  '/register': RegisterView,
   '/dashboard': DashboardView,
   '/tasks': TasksView,
   '/tasks/new': (params) => TaskFormView({ mode: 'create', ...params }),
