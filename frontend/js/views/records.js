@@ -18,6 +18,7 @@ export async function RecordsView() {
   try { data = await api.listRecords({ page:1, per_page:50 }); } catch {}
   const items = Array.isArray(data) ? data : (data.items || []);
 
+  // r.title || r.name || r.id  ... r（APIレスポンス）にtitleが無いならname, nameが無いならid
   return `
   <div class="card">
     <h2>実績記録</h2>

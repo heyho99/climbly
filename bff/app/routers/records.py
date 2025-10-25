@@ -125,6 +125,7 @@ async def list_records_diary(
 
     try:
         async with httpx.AsyncClient() as client:
+            # 1. 実績データを取得
             response = await client.get(
                 f"{RECORD_SVC_BASE}/records",
                 params=params,
@@ -137,13 +138,27 @@ async def list_records_diary(
                     detail=response.json() if response.headers.get("content-type") == "application/json" else {"message": "record service error"}
                 )
             
-            # BFF用に形式を変換
             records = response.json()
+            
+            # 2. 全タスクを取得してタスク名をマッピング
+            tasks_response = await client.get(
+                "http://task-service/v1/tasks",
+                params={"mine": "true"},
+                headers=auth_header,
+                timeout=30.0
+            )
+            
+            task_name_map = {}
+            if tasks_response.status_code == 200:
+                all_tasks = tasks_response.json()
+                task_name_map = {t["task_id"]: t["task_name"] for t in all_tasks}
+            
+            # 3. BFF用に形式を変換（タスク名をマージ）
             items = [
                 {
                     "record_work_id": r["record_work_id"],
                     "task_id": r["task_id"],
-                    "task_title": f"Task #{r['task_id']}",  # 簡易版、本来はtask-serviceから取得
+                    "task_title": task_name_map.get(r["task_id"]),
                     "start_at": r["start_at"],
                     "end_at": r["end_at"],
                     "work_time": r["work_time"],
