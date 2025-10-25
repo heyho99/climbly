@@ -78,8 +78,7 @@ async def list_records_by_task(
                     task_with_records = tasks_with_records[current_task_id]
                     merged_tasks.append({
                         "task_id": task["task_id"],
-                        # "task_title": task["task_name"],
-                        "task_title": "",
+                        "task_title": task["task_name"],
                         "assignees": [],
                         "records": task_with_records["records"]
                     })
@@ -87,8 +86,7 @@ async def list_records_by_task(
                     # 実績がないタスク
                     merged_tasks.append({
                         "task_id": task["task_id"],
-                        # "task_title": task["task_name"],
-                        "task_title": "",
+                        "task_title": task["task_name"],
                         "assignees": [],
                         "records": []
                     })
