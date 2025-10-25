@@ -179,7 +179,7 @@ def list_records_by_task(
 
         tasks.append({
             "task_id": tid,
-            "task_title": f"Task #{tid}",  # シンプルなタイトル、詳細はBFFで取得
+            "task_title": "",  # シンプルなタイトル、詳細はBFFで取得
             "assignees": [],  # 簡易版では空配列
             "records": records,
         })

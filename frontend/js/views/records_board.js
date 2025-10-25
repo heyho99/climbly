@@ -16,7 +16,7 @@ export async function RecordsBoardView(params = {}) {
   const columnHtml = tasks.map(t => `
     <div class="kanban-column">
       <div class="kanban-column__header">
-        <div class="kanban-column__title">${t.task_title || `Task #${t.task_id}`}</div>
+        <div class="kanban-column__title">${t.task_title}</div>
         <div class="kanban-column__meta">${(t.records || []).length} 件</div>
       </div>
       <div class="kanban-column__body">

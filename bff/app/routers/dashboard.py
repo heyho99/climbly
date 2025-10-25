@@ -7,7 +7,7 @@ router = APIRouter(tags=["dashboard"])
 def summary():
     # TODO: record-service などから集計
     return {
-        "active_tasks": 3,
+        "active_tasks": 4,
         "completed_tasks_total": 12,
         "completed_tasks_this_month": 2,
         "work_time_this_month": 540,  # minutes

@@ -26,7 +26,12 @@ def login(req: LoginReq):
             resp = client.post(f"{USER_SVC_BASE}/auth/login", json=req.model_dump())
         if resp.is_success:
             return resp.json()
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+        # エラーレスポンスの処理
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = {"message": "user-service error", "status_code": resp.status_code}
+        raise HTTPException(status_code=resp.status_code, detail=detail)
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
 
@@ -38,7 +43,12 @@ def register(req: RegisterReq):
             resp = client.post(f"{USER_SVC_BASE}/auth/register", json=req.model_dump())
         if resp.is_success:
             return resp.json()
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+        # エラーレスポンスの処理
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = {"message": "user-service error", "status_code": resp.status_code}
+        raise HTTPException(status_code=resp.status_code, detail=detail)
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
 
@@ -50,6 +60,11 @@ def logout():
             resp = client.post(f"{USER_SVC_BASE}/auth/logout")
         if resp.is_success:
             return resp.json()
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+        # エラーレスポンスの処理
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = {"message": "user-service error", "status_code": resp.status_code}
+        raise HTTPException(status_code=resp.status_code, detail=detail)
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})

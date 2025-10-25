@@ -21,7 +21,7 @@ export async function DashboardView() {
         ` : '<div class="helper">サマリ取得に失敗しました</div>'}
       </div>
       <div class="card">
-        <h3>遅延気味のタスク</h3>
+        <h3>遅延タスク</h3>
         ${laggards && laggards.length ? `
           <table class="table">
             <thead><tr><th>タスク</th><th>差分(進捗/時間)</th></tr></thead>

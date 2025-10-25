@@ -1,4 +1,5 @@
-# docker-compose up -d --build <service名(複数選択可)>
+# docker-compose up -d --build 
+# docker-compose up -d --build bff
 # docker exec <コンテナ名> <コマンド>  でコンテナ内でコマンドを実行できる
 
 # --build：contextで指定されたディレクトリ(Dockerfile,nginx.conf,ソースコード)を取り込み、イメージを作成

@@ -16,7 +16,7 @@ function formatDateForInput(utcDateString) {
 export async function RecordsView() {
   let data = { items: [] };
   try { data = await api.listRecords({ page:1, per_page:50 }); } catch {}
-  const items = Array.isArray(data) ? data : (data.items || []);
+  const items = Array.isArray(data) ? data : (data.items || []); // dataが配列ならそのまま、そうでなければdata.itemsを配列として扱う
 
   // r.title || r.name || r.id  ... r（APIレスポンス）にtitleが無いならname, nameが無いならid
   return `
