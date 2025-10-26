@@ -15,20 +15,34 @@
 
 <body>
 
-  <header class="app-header">
-    <div class="container">
-      <h1 class="logo">Climbly</h1>
-      <nav class="nav" id="app-nav"></nav>
+  <div class="app-layout">
+    <!-- 左サイドバー -->
+    <aside class="sidebar" id="app-sidebar">
+      <div class="sidebar-header">
+        <h1 class="logo">Climbly</h1>
+      </div>
+      <nav class="sidebar-nav" id="app-nav"></nav>
+    </aside>
+
+    <!-- メインコンテンツエリア -->
+    <div class="main-content">
+      <header class="app-header">
+        <div class="container">
+          <div class="header-right">
+            <span id="user-info"></span>
+          </div>
+        </div>
+      </header>
+
+      <main class="container">
+        <div id="app-root"></div> <!-- router.jsのhandleRoute()がここにビューをレンダリング -->
+      </main>
+
+      <footer class="app-footer">
+        <div class="container">© 2025 Climbly</div>
+      </footer>
     </div>
-  </header>
-
-  <main class="container">
-    <div id="app-root"></div> <!-- router.jsのhandleRoute()がここにビューをレンダリング -->
-  </main>
-
-  <footer class="app-footer">
-    <div class="container">© 2025 Climbly</div>
-  </footer>
+  </div>
 
   <script type="module" src="./js/app.js"></script>
 </body>

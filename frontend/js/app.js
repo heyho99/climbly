@@ -12,7 +12,20 @@ import { RecordsBoardView, setupRecordsBoardEvents } from './views/records_board
 // ナビゲーション(ヘッダやサイドバーの)をレンダリングする関数
 function renderNav() {
   const nav = document.getElementById('app-nav');
+  const sidebar = document.getElementById('app-sidebar');
   const authed = !!getToken();
+  
+  // サイドバーの表示/非表示
+  if (sidebar) {
+    sidebar.style.display = authed ? 'flex' : 'none';
+  }
+  
+  // メインコンテンツのマージン調整
+  const mainContent = document.querySelector('.main-content');
+  if (mainContent) {
+    mainContent.style.marginLeft = authed ? '240px' : '0';
+  }
+  
   nav.innerHTML = authed ? `
     <a href="#/dashboard" data-link>ダッシュボード</a>
     <a href="#/tasks" data-link>タスク</a>
@@ -32,6 +45,24 @@ function renderNav() {
       navigateTo('/login');
     });
   }
+  
+  // アクティブなリンクをハイライト
+  updateActiveNavLink();
+}
+
+// アクティブなナビゲーションリンクを更新
+function updateActiveNavLink() {
+  const currentPath = location.hash.replace(/^#/, '') || '/login';
+  const links = document.querySelectorAll('#app-nav a[data-link]');
+  
+  links.forEach(link => {
+    const href = link.getAttribute('href').replace(/^#/, '');
+    if (href === currentPath || (currentPath.startsWith(href) && href !== '/login')) {
+      link.classList.add('active');
+    } else {
+      link.classList.remove('active');
+    }
+  });
 }
 
 // ガード：画面遷移直前に実行されるログイン判定（ログイン有無はトークンで判断）
