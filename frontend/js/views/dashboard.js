@@ -1,10 +1,22 @@
 import { api } from '../api.js';
+import { initDashboardPlanChart } from './components/dashboard_plan_chart.js';
 
 export async function DashboardView() {
   let summary = null; 
   let laggards = [];
+  let planData = [];
+  
   try { summary = await api.dashboardSummary(); } catch {} // bffの/dashboard/summary
   try { laggards = await api.laggingTasks(); } catch {} // bffの/dashboard/lagging_tasks
+  try { planData = await api.dashboardDailyPlanAggregate(); } catch {} // bffの/dashboard/daily_plan_aggregate
+
+  // グラフ初期化（DOM生成後）
+  setTimeout(() => {
+    const chartEl = document.getElementById('dashboard-plan-chart');
+    if (chartEl) {
+      initDashboardPlanChart({ el: chartEl, items: planData });
+    }
+  }, 100);
 
   return `
   <div class="row">
@@ -21,6 +33,12 @@ export async function DashboardView() {
           </div>
         ` : '<div class="helper">サマリ取得に失敗しました</div>'}
       </div>
+      
+      <div class="card">
+        <h3>累積作業時間予定</h3>
+        <div id="dashboard-plan-chart" style="width:100%; height:300px;"></div>
+      </div>
+      
       <div class="card">
         <h3>遅延タスク</h3>
         ${laggards && laggards.length ? `

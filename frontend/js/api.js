@@ -40,6 +40,10 @@ export const api = {
   // Dashboard
   async dashboardSummary() { return request('/dashboard/summary'); },
   async laggingTasks() { return request('/dashboard/lagging_tasks'); },
+  async dashboardDailyPlanAggregate(params={}) {
+    const qs = toQuery(params);
+    return request(`/dashboard/daily_plan_aggregate${qs}`);
+  },
 
   // Tasks
   async listTasks(params={}) {

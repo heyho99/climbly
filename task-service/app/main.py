@@ -494,3 +494,65 @@ def put_daily_plans_bulk(
         except Exception:
             conn.rollback()
             raise
+
+
+@app.get("/v1/daily_plans/aggregate")
+def aggregate_daily_plans(
+    from_: Optional[date] = Query(default=None, alias="from"),
+    to: Optional[date] = Query(default=None, alias="to"),
+    current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token)
+):
+    """全タスクの日次計画を集計（ダッシュボード用）"""
+    # user-serviceから権限のあるtask_idリストを取得
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            auth_resp = client.get(
+                f"{USER_SVC_BASE}/task_auths",
+                headers={"authorization": f"Bearer {token}"}
+            )
+            if not auth_resp.is_success:
+                raise HTTPException(
+                    status_code=502,
+                    detail={"message": "failed to get task_auths", "error": auth_resp.text}
+                )
+            task_auths = auth_resp.json()
+            authorized_task_ids = [auth["task_id"] for auth in task_auths]
+            
+            if not authorized_task_ids:
+                return []
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=502,
+            detail={"message": "user-service unavailable", "error": str(e)}
+        )
+    
+    # daily_plansを日付ごとに集計
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            query = """
+                SELECT target_date, SUM(time_plan_value) as total_time_plan
+                FROM daily_plans
+                WHERE task_id = ANY(%s)
+            """
+            params: List = [authorized_task_ids]
+            
+            if from_ is not None:
+                query += " AND target_date >= %s"
+                params.append(from_)
+            if to is not None:
+                query += " AND target_date <= %s"
+                params.append(to)
+            
+            query += " GROUP BY target_date ORDER BY target_date ASC"
+            
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            
+            return [
+                {
+                    "target_date": str(r[0]),
+                    "total_time_plan": int(r[1]) if r[1] else 0
+                }
+                for r in rows
+            ]
