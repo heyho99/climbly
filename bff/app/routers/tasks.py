@@ -16,7 +16,7 @@ def _forward_auth_headers(request: Request) -> dict:
 
 
 @router.get("/tasks")
-def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional[str] = None, status: Optional[str] = None, page: int = 1, per_page: int = 50):
+def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional[str] = None, status: Optional[str] = None, include_daily_plans: Optional[bool] = False, page: int = 1, per_page: int = 50):
     # v1: task-service への単純委譲（ページングは後続拡張でBFF側対応）
     params = {"mine": mine} # 自分のタスクのみ取得（デフォルトで?mine=trueというクエリが来る）
     if category is not None:
@@ -27,15 +27,42 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
         # httpx.Clientやhttpx.getを使って、apiにアクセス
         with httpx.Client(timeout=10.0) as client:
             resp = client.get(f"{TASK_SVC_BASE}/tasks", params=params, headers=_forward_auth_headers(request)) # SVC：serviceのこと
-        if resp.is_success:
+            if not resp.is_success:
+                raise HTTPException(status_code=resp.status_code, detail=resp.json())
+            
             items = resp.json()
+            
+            # itemsがリストでない場合は空リストに
+            if not isinstance(items, list):
+                items = []
+            
+            # include_daily_plansがTrueの場合、各タスクのdaily_plansを取得
+            if include_daily_plans:
+                headers = _forward_auth_headers(request)
+                for task in items:
+                    # taskが辞書であることを確認
+                    if not isinstance(task, dict):
+                        continue
+                    task_id = task.get("task_id")
+                    if task_id:
+                        try:
+                            plans_resp = client.get(f"{TASK_SVC_BASE}/tasks/{task_id}/daily_plans", headers=headers)
+                            if plans_resp.is_success:
+                                task["daily_plans"] = plans_resp.json()
+                            else:
+                                task["daily_plans"] = []
+                        except Exception as e:
+                            print(f"Error fetching daily_plans for task {task_id}: {e}")
+                            task["daily_plans"] = []
+                    else:
+                        task["daily_plans"] = []
+            
             return {
                 "items": items,
                 "page": page,
                 "per_page": per_page,
                 "total": len(items),
             }
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail={"message": "task-service unavailable", "error": str(e)})
 

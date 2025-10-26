@@ -48,7 +48,7 @@ export const api = {
   // Tasks
   async listTasks(params={}) {
     const qs = toQuery({ mine:'true', ...params }); // デフォルトで自分のタスクのみ取得
-    return request(`/tasks${qs}`); // /tasks?mine=true&page=1&per_page=50
+    return request(`/tasks${qs}`); // /tasks?mine=true&page=1&per_page=50&include_daily_plans=true
   },
   async getTask(task_id) { return request(`/tasks/${task_id}`); },
   // async createTask(payload) { return request('/tasks', { method:'POST', body: payload }); },
