@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 import psycopg
+import httpx
 
 from app.schemas import TaskIn, TaskOut, TaskUpdate, DailyPlanOut, DailyPlanBulkItem
 
@@ -20,6 +21,9 @@ DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_NAME = os.getenv("DB_NAME", "task_db")
 DB_USER = os.getenv("DB_USER", "climbly")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "climbly")
+
+# user-service URL
+USER_SVC_BASE = os.getenv("USER_SVC_BASE", "http://user-service/v1")
 
 auth_scheme = HTTPBearer(auto_error=False)
 
@@ -54,6 +58,13 @@ async def get_current_user_id(
     if creds is None or creds.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail={"message": "missing bearer token"})
     return decode_token(creds.credentials)
+
+
+def get_auth_token(creds: Optional[HTTPAuthorizationCredentials] = Depends(auth_scheme)) -> str:
+    """認証トークンを取得（user-serviceへの転送用）"""
+    if creds is None or creds.scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail={"message": "missing bearer token"})
+    return creds.credentials
 
 
 @app.get("/healthz")
@@ -112,7 +123,11 @@ def list_tasks(
 
 
 @app.post("/v1/tasks", response_model=TaskOut)
-def create_task(req: TaskIn, current_user_id: int = Depends(get_current_user_id)):
+def create_task(
+    req: TaskIn, 
+    current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token)
+):
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -134,6 +149,35 @@ def create_task(req: TaskIn, current_user_id: int = Depends(get_current_user_id)
                 ),
             )
             r = cur.fetchone()
+            task_id = r[0]
+            
+            # タスク作成後、作成者のtask_authをadminで作成
+            try:
+                with httpx.Client(timeout=10.0) as client:
+                    auth_resp = client.post(
+                        f"{USER_SVC_BASE}/task_auths",
+                        json={
+                            "task_id": task_id,
+                            "user_id": current_user_id,
+                            "task_user_auth": "admin"
+                        },
+                        headers={"authorization": f"Bearer {token}"}
+                    )
+                    if not auth_resp.is_success:
+                        # task_auth作成に失敗した場合、タスクを削除してロールバック
+                        cur.execute("DELETE FROM tasks WHERE task_id=%s", (task_id,))
+                        raise HTTPException(
+                            status_code=502, 
+                            detail={"message": "failed to create task_auth", "error": auth_resp.text}
+                        )
+            except httpx.RequestError as e:
+                # user-serviceに到達できない場合、タスクを削除してロールバック
+                cur.execute("DELETE FROM tasks WHERE task_id=%s", (task_id,))
+                raise HTTPException(
+                    status_code=502, 
+                    detail={"message": "user-service unavailable", "error": str(e)}
+                )
+            
             return TaskOut(
                 task_id=r[0],
                 created_by=r[1],

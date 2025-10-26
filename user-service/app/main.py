@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError # joseはJWTの生成や検証のライブラリ
-from app.schemas import RegisterReq, LoginReq, TokenOut, UserOut
+from app.schemas import RegisterReq, LoginReq, TokenOut, UserOut, TaskAuthIn, TaskAuthOut
 import psycopg  # PythonからPostgreSQLに接続するためのドライバ
 from passlib.context import CryptContext # passlibはパスワードのハッシュ化のライブラリ
 
@@ -181,7 +181,7 @@ def me(current_user_id: int = Depends(get_current_user_id)):
 @app.get("/v1/task_auths")
 def get_task_auths(task_id: Optional[int] = None, current_user_id: int = Depends(get_current_user_id)):
     # v1ではreadのみの利用想定（拡張はv2）
-    query = "SELECT task_auth_id, task_id, user_id, task_user_auth, created_at, updated_at FROM task_auths"
+    query = "SELECT task_auth_id, task_id, user_id, task_user_auth, last_updated_user, created_at, updated_at FROM task_auths"
     params = []
     if task_id is not None:
         query += " WHERE task_id=%s AND user_id=%s"
@@ -199,8 +199,46 @@ def get_task_auths(task_id: Optional[int] = None, current_user_id: int = Depends
                     "task_id": r[1],
                     "user_id": r[2],
                     "task_user_auth": r[3],
-                    "created_at": r[4],
-                    "updated_at": r[5],
+                    "last_updated_user": r[4],
+                    "created_at": r[5],
+                    "updated_at": r[6],
                 }
                 for r in rows
             ]
+
+
+@app.post("/v1/task_auths", response_model=TaskAuthOut)
+def create_task_auth(req: TaskAuthIn, current_user_id: int = Depends(get_current_user_id)):
+    # task_user_authのバリデーション
+    if req.task_user_auth not in ["read", "write", "admin"]:
+        raise HTTPException(status_code=400, detail={"message": "task_user_auth must be read, write, or admin"})
+    
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # 重複チェック（同じtask_idとuser_idの組み合わせが既に存在するか）
+            cur.execute(
+                "SELECT 1 FROM task_auths WHERE task_id=%s AND user_id=%s",
+                (req.task_id, req.user_id),
+            )
+            if cur.fetchone() is not None:
+                raise HTTPException(status_code=409, detail={"message": "task_auth already exists"})
+            
+            # task_auth作成
+            cur.execute(
+                """
+                INSERT INTO task_auths (task_id, user_id, task_user_auth, last_updated_user)
+                VALUES (%s, %s, %s, %s)
+                RETURNING task_auth_id, task_id, user_id, task_user_auth, last_updated_user, created_at, updated_at
+                """,
+                (req.task_id, req.user_id, req.task_user_auth, current_user_id),
+            )
+            row = cur.fetchone()
+            return TaskAuthOut(
+                task_auth_id=row[0],
+                task_id=row[1],
+                user_id=row[2],
+                task_user_auth=row[3],
+                last_updated_user=row[4],
+                created_at=row[5],
+                updated_at=row[6],
+            )

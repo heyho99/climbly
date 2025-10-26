@@ -1,6 +1,15 @@
-# DB専用 compose（複数DBを1つのcomposeで管理）
-# 起動例: docker-compose -f DB/docker-compose.yml up -d
+# 起動
+# docker-compose -f DB/docker-compose.yml up -d
 # docker-compose -f DB/docker-compose.yml up -d user-db task-db
+
+# 停止
+# docker-compose -f DB/docker-compose.yml stop -d
+
+# 停止して削除
+# docker-compose -f DB/docker-compose.yml down  NWとコンテナを削除
+# docker-compose -f DB/docker-compose.yml down -v  NWとコンテナとvolumeを削除
+# docker-compose -f DB/docker-compose.yml down --rmi all -v  NWとコンテナとvolumeとイメージを削除
+
 
 # init.sqlを実行したいとき、volumeを削除する必要がある
 # docker volume ls  ->  docker volume rm <volume名>
