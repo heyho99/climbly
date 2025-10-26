@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+from datetime import datetime
 from fastapi import APIRouter, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -19,21 +20,44 @@ async def summary(auth_header: dict = Depends(get_auth_header)):
     """ダッシュボードサマリを取得"""
     active_tasks = 0
     completed_tasks_total = 0
+    completed_tasks_this_month = 0
+    work_time_this_month = 0
+    work_time_total = 0
     
-    # task-serviceから進行中タスクと完了タスクを並列取得
+    # 今月の開始日を計算
+    now = datetime.now()
+    current_month_start = datetime(now.year, now.month, 1)
+    month_start_str = f"{now.year}-{now.month:02d}-01"
+    
+    # 各サービスから並列取得
     try:
         async with httpx.AsyncClient() as client:
             # 並列実行で高速化
             results = await asyncio.gather(
+                # タスク: 進行中
                 client.get(
                     "http://task-service/v1/tasks",
                     params={"mine": "true", "status": "active"},
                     headers=auth_header,
                     timeout=10.0
                 ),
+                # タスク: 完了（累計）
                 client.get(
                     "http://task-service/v1/tasks",
                     params={"mine": "true", "status": "completed"},
+                    headers=auth_header,
+                    timeout=10.0
+                ),
+                # 作業時間: 今月
+                client.get(
+                    "http://record-service/v1/metrics/work_time/summary",
+                    params={"from": month_start_str},
+                    headers=auth_header,
+                    timeout=10.0
+                ),
+                # 作業時間: 累計
+                client.get(
+                    "http://record-service/v1/metrics/work_time/summary",
                     headers=auth_header,
                     timeout=10.0
                 ),
@@ -45,10 +69,35 @@ async def summary(auth_header: dict = Depends(get_auth_header)):
             if not isinstance(active_response, Exception) and active_response.status_code == 200:
                 active_tasks = len(active_response.json())
             
-            # 完了タスク数（累計）
+            # 完了タスク数（累計・今月）
             completed_response = results[1]
             if not isinstance(completed_response, Exception) and completed_response.status_code == 200:
-                completed_tasks_total = len(completed_response.json())
+                completed_tasks = completed_response.json()
+                completed_tasks_total = len(completed_tasks)
+                
+                # 今月完了数を計算
+                for task in completed_tasks:
+                    updated_at_str = task.get("updated_at")
+                    if updated_at_str:
+                        try:
+                            # ISO 8601形式をパース（"2025-10-26T10:30:00" or "2025-10-26T10:30:00Z"）
+                            # タイムゾーン情報を削除してnaiveなdatetimeとして比較
+                            updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "").split("+")[0])
+                            if updated_at >= current_month_start:
+                                completed_tasks_this_month += 1
+                        except (ValueError, AttributeError):
+                            # パースエラーは無視
+                            pass
+            
+            # 今月作業時間
+            work_time_this_month_response = results[2]
+            if not isinstance(work_time_this_month_response, Exception) and work_time_this_month_response.status_code == 200:
+                work_time_this_month = work_time_this_month_response.json().get("total_work_time", 0)
+            
+            # 累計作業時間
+            work_time_total_response = results[3]
+            if not isinstance(work_time_total_response, Exception) and work_time_total_response.status_code == 200:
+                work_time_total = work_time_total_response.json().get("total_work_time", 0)
                 
     except Exception:
         # 予期しないエラーの場合は0を返す
@@ -57,9 +106,9 @@ async def summary(auth_header: dict = Depends(get_auth_header)):
     return {
         "active_tasks": active_tasks,
         "completed_tasks_total": completed_tasks_total,
-        "completed_tasks_this_month": 2,  # TODO: 後で実装
-        "work_time_this_month": 540,  # minutes, TODO: 後で実装
-        "work_time_total": 4320,  # TODO: 後で実装
+        "completed_tasks_this_month": completed_tasks_this_month,
+        "work_time_this_month": work_time_this_month,
+        "work_time_total": work_time_total,
     }
 
 

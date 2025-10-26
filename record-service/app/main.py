@@ -358,3 +358,29 @@ def delete_record(
                 raise HTTPException(status_code=404, detail={"message": "record not found"})
     
     return {"ok": True}
+
+
+# Metrics
+@app.get("/v1/metrics/work_time/summary")
+def get_work_time_summary(
+    from_date: Optional[str] = Query(default=None, alias="from"),
+    to_date: Optional[str] = Query(default=None, alias="to"),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """作業時間の集計を取得"""
+    query = "SELECT COALESCE(SUM(work_time), 0) FROM record_works WHERE created_by=%s"
+    params = [current_user_id]
+    
+    if from_date:
+        query += " AND created_at >= %s"
+        params.append(from_date)
+    if to_date:
+        query += " AND created_at < %s"
+        params.append(to_date)
+    
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            total = cur.fetchone()[0]
+    
+    return {"total_work_time": int(total)}
