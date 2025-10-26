@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Request
 from typing import Optional, List, Dict, Any
+from datetime import datetime
 import httpx
 
 router = APIRouter(tags=["tasks"])
 
 TASK_SVC_BASE = "http://task-service/v1"
+RECORD_SVC_BASE = "http://record-service/v1"
 
 
 def _forward_auth_headers(request: Request) -> dict:
@@ -15,8 +17,58 @@ def _forward_auth_headers(request: Request) -> dict:
     return headers
 
 
+def _aggregate_daily_actuals(records: List[Dict]) -> List[Dict]:
+    """
+    実績データを日付ごとに集計（累積値）
+    records: [{ start_at, progress_value, work_time, ... }]
+    戻り値: [{ target_date, work_actual_value, time_actual_value }]
+    """
+    if not records:
+        return []
+    
+    # 日付ごとにグループ化
+    daily_data = {}
+    
+    for record in sorted(records, key=lambda r: r.get("start_at", "")):
+        start_at_str = record.get("start_at")
+        if not start_at_str:
+            continue
+        
+        try:
+            # ISO形式の日時から日付部分を抽出
+            date_str = start_at_str.split("T")[0]  # "2025-01-01T10:00:00" -> "2025-01-01"
+        except:
+            continue
+        
+        if date_str not in daily_data:
+            daily_data[date_str] = {
+                "progress_sum": 0,
+                "time_sum": 0
+            }
+        
+        daily_data[date_str]["progress_sum"] += record.get("progress_value", 0)
+        daily_data[date_str]["time_sum"] += record.get("work_time", 0)
+    
+    # 累積値に変換
+    result = []
+    cumulative_progress = 0
+    cumulative_time = 0
+    
+    for date_str in sorted(daily_data.keys()):
+        cumulative_progress += daily_data[date_str]["progress_sum"]
+        cumulative_time += daily_data[date_str]["time_sum"]
+        
+        result.append({
+            "target_date": date_str,
+            "work_actual_value": min(cumulative_progress, 100),  # 100%を超えないように
+            "time_actual_value": cumulative_time
+        })
+    
+    return result
+
+
 @router.get("/tasks")
-def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional[str] = None, status: Optional[str] = None, include_daily_plans: Optional[bool] = False, page: int = 1, per_page: int = 50):
+def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional[str] = None, status: Optional[str] = None, include_daily_plans: Optional[bool] = False, include_actuals: Optional[bool] = False, page: int = 1, per_page: int = 50):
     # v1: task-service への単純委譲（ページングは後続拡張でBFF側対応）
     params = {"mine": mine} # 自分のタスクのみ取得（デフォルトで?mine=trueというクエリが来る）
     if category is not None:
@@ -56,6 +108,33 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
                             task["daily_plans"] = []
                     else:
                         task["daily_plans"] = []
+            
+            # include_actualsがTrueの場合、各タスクの実績データを取得して集計
+            if include_actuals:
+                headers = _forward_auth_headers(request)
+                for task in items:
+                    if not isinstance(task, dict):
+                        continue
+                    task_id = task.get("task_id")
+                    if task_id:
+                        try:
+                            # record-serviceから実績を取得
+                            records_resp = client.get(
+                                f"{RECORD_SVC_BASE}/records",
+                                params={"task_id": task_id},
+                                headers=headers
+                            )
+                            if records_resp.is_success:
+                                records = records_resp.json()
+                                # 日付ごとに集計
+                                task["daily_actuals"] = _aggregate_daily_actuals(records)
+                            else:
+                                task["daily_actuals"] = []
+                        except Exception as e:
+                            print(f"Error fetching actuals for task {task_id}: {e}")
+                            task["daily_actuals"] = []
+                    else:
+                        task["daily_actuals"] = []
             
             return {
                 "items": items,

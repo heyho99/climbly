@@ -4,9 +4,52 @@ import { api } from '../api.js';
 import { navigateTo } from '../router.js';
 import { initDailyPlanChart } from './components/daily_plan_chart.js';
 
+/**
+ * 予定と実績データをマージする
+ * @param {Array} plans - daily_plans配列
+ * @param {Array} actuals - daily_actuals配列
+ * @returns {Array} マージされたデータ
+ */
+function mergePlanAndActual(plans, actuals) {
+  const dateMap = new Map();
+  
+  // 予定データを追加
+  (plans || []).forEach(p => {
+    dateMap.set(p.target_date, {
+      target_date: p.target_date,
+      work_plan_value: p.work_plan_value || 0,
+      time_plan_value: p.time_plan_value || 0,
+      work_actual_value: 0,
+      time_actual_value: 0
+    });
+  });
+  
+  // 実績データを追加
+  (actuals || []).forEach(a => {
+    const existing = dateMap.get(a.target_date);
+    if (existing) {
+      existing.work_actual_value = a.work_actual_value || 0;
+      existing.time_actual_value = a.time_actual_value || 0;
+    } else {
+      dateMap.set(a.target_date, {
+        target_date: a.target_date,
+        work_plan_value: 0,
+        time_plan_value: 0,
+        work_actual_value: a.work_actual_value || 0,
+        time_actual_value: a.time_actual_value || 0
+      });
+    }
+  });
+  
+  // 日付順にソート
+  return Array.from(dateMap.values()).sort((a, b) => 
+    a.target_date.localeCompare(b.target_date)
+  );
+}
+
 export async function TasksView() {
   let data = { items: [] };
-  try { data = await api.listTasks({ page: 1, per_page: 50, include_daily_plans: true }); } catch {}
+  try { data = await api.listTasks({ page: 1, per_page: 50, include_daily_plans: true, include_actuals: true }); } catch {}
   const items = Array.isArray(data) ? data : (data.items || []);
 
   // ステータス表示用の関数
@@ -117,10 +160,10 @@ export async function setupTasksEvents() {
   });
 
   // グラフの初期化
-  // 各タスクカードからdaily_plansを取得してグラフを描画
+  // 各タスクカードからdaily_plansとdaily_actualsを取得してグラフを描画
   let data = { items: [] };
   try { 
-    data = await api.listTasks({ page: 1, per_page: 50, include_daily_plans: true }); 
+    data = await api.listTasks({ page: 1, per_page: 50, include_daily_plans: true, include_actuals: true }); 
   } catch (err) {
     console.error('Failed to load tasks for charts:', err);
     return;
@@ -134,15 +177,26 @@ export async function setupTasksEvents() {
     }
     
     const dailyPlans = task.daily_plans || [];
+    const dailyActuals = task.daily_actuals || [];
     
-    // 作業進捗予定グラフ
+    // 予定と実績をマージ
+    const mergedData = mergePlanAndActual(dailyPlans, dailyActuals);
+    
+    // データがない場合はスキップ
+    if (mergedData.length === 0) {
+      return;
+    }
+    
+    // 作業進捗グラフ（予定+実績）
     const workChartEl = document.getElementById(`chart-work-${task.task_id}`);
-    if (workChartEl && dailyPlans.length > 0) {
+    if (workChartEl) {
       try {
+        // 実績データがある場合は予定と実績を両方表示、ない場合は予定のみ
+        const hasActuals = dailyActuals.length > 0;
         initDailyPlanChart({
           el: workChartEl,
-          items: dailyPlans,
-          series: ['work_plan'],
+          items: mergedData,
+          series: hasActuals ? ['work_plan', 'work_actual'] : ['work_plan'],
           readOnly: true
         });
       } catch (err) {
@@ -150,14 +204,16 @@ export async function setupTasksEvents() {
       }
     }
     
-    // 時間予定グラフ
+    // 時間グラフ（予定+実績）
     const timeChartEl = document.getElementById(`chart-time-${task.task_id}`);
-    if (timeChartEl && dailyPlans.length > 0) {
+    if (timeChartEl) {
       try {
+        // 実績データがある場合は予定と実績を両方表示、ない場合は予定のみ
+        const hasActuals = dailyActuals.length > 0;
         initDailyPlanChart({
           el: timeChartEl,
-          items: dailyPlans,
-          series: ['time_plan'],
+          items: mergedData,
+          series: hasActuals ? ['time_plan', 'time_actual'] : ['time_plan'],
           readOnly: true
         });
       } catch (err) {
