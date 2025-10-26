@@ -67,6 +67,23 @@ def get_auth_token(creds: Optional[HTTPAuthorizationCredentials] = Depends(auth_
     return creds.credentials
 
 
+def check_task_permission(task_id: int, user_id: int, token: str) -> bool:
+    """ユーザーが指定されたタスクへのアクセス権を持っているかチェック"""
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            auth_resp = client.get(
+                f"{USER_SVC_BASE}/task_auths",
+                params={"task_id": task_id},
+                headers={"authorization": f"Bearer {token}"}
+            )
+            if auth_resp.is_success:
+                task_auths = auth_resp.json()
+                return len(task_auths) > 0
+            return False
+    except httpx.RequestError:
+        return False
+
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
@@ -75,10 +92,11 @@ def healthz():
 # Tasks
 @app.get("/v1/tasks", response_model=List[TaskOut])
 def list_tasks(
-    mine: bool = Query(default=True),
+    mine: bool = Query(default=True),   # bool: 自分がアクセス権を持つタスクのみ取得する場合はTrue
     category: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None, regex="^(active|completed|paused|cancelled)$"),
     current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token),
 ):
     query = (
         "SELECT task_id, created_by, task_name, task_content, start_at, end_at, "
@@ -86,9 +104,36 @@ def list_tasks(
     )
     params: List = []
     where = []
+    
     if mine:
-        where.append("created_by=%s")
-        params.append(current_user_id)
+        # user-serviceからログインユーザーがアクセス権を持つtask_idリストを取得
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                auth_resp = client.get(
+                    f"{USER_SVC_BASE}/task_auths",
+                    headers={"authorization": f"Bearer {token}"}
+                )
+                if not auth_resp.is_success:
+                    raise HTTPException(
+                        status_code=502,
+                        detail={"message": "failed to get task_auths", "error": auth_resp.text}
+                    )
+                task_auths = auth_resp.json()
+                authorized_task_ids = [auth["task_id"] for auth in task_auths]
+                
+                if authorized_task_ids:
+                    # 権限のあるタスクIDで絞り込む
+                    where.append("task_id = ANY(%s)")
+                    params.append(authorized_task_ids)
+                else:
+                    # 権限のあるタスクがない場合は空を返す
+                    return []
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=502,
+                detail={"message": "user-service unavailable", "error": str(e)}
+            )
+    
     if category is not None:
         where.append("category=%s")
         params.append(category)
@@ -195,15 +240,23 @@ def create_task(
 
 
 @app.get("/v1/tasks/{task_id}", response_model=TaskOut)
-def get_task(task_id: int, current_user_id: int = Depends(get_current_user_id)):
+def get_task(
+    task_id: int, 
+    current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token)
+):
+    # アクセス権チェック
+    if not check_task_permission(task_id, current_user_id, token):
+        raise HTTPException(status_code=404, detail={"message": "task not found"})
+    
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 (
                     "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, status, created_at, updated_at "
-                    "FROM tasks WHERE task_id=%s AND created_by=%s"
+                    "FROM tasks WHERE task_id=%s"
                 ),
-                (task_id, current_user_id),
+                (task_id,),
             )
             r = cur.fetchone()
             if r is None:
@@ -225,7 +278,16 @@ def get_task(task_id: int, current_user_id: int = Depends(get_current_user_id)):
 
 
 @app.patch("/v1/tasks/{task_id}", response_model=TaskOut)
-def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(get_current_user_id)):
+def update_task(
+    task_id: int, 
+    req: TaskUpdate, 
+    current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token)
+):
+    # アクセス権チェック
+    if not check_task_permission(task_id, current_user_id, token):
+        raise HTTPException(status_code=404, detail={"message": "task not found"})
+    
     fields = []
     params: List = []
     for col, val in (
@@ -243,12 +305,12 @@ def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(ge
             params.append(val)
     if not fields:
         raise HTTPException(status_code=400, detail={"message": "no fields to update"})
-    params.extend([task_id, current_user_id])
+    params.append(task_id)
 
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE tasks SET {', '.join(fields)}, updated_at=NOW() WHERE task_id=%s AND created_by=%s",
+                f"UPDATE tasks SET {', '.join(fields)}, updated_at=NOW() WHERE task_id=%s",
                 params,
             )
             if cur.rowcount == 0:
@@ -256,9 +318,9 @@ def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(ge
             cur.execute(
                 (
                     "SELECT task_id, created_by, task_name, task_content, start_at, end_at, category, target_time, comment, status, created_at, updated_at "
-                    "FROM tasks WHERE task_id=%s AND created_by=%s"
+                    "FROM tasks WHERE task_id=%s"
                 ),
-                (task_id, current_user_id),
+                (task_id,),
             )
             r = cur.fetchone()
             return TaskOut(
@@ -278,11 +340,19 @@ def update_task(task_id: int, req: TaskUpdate, current_user_id: int = Depends(ge
 
 
 @app.delete("/v1/tasks/{task_id}")
-def delete_task(task_id: int, current_user_id: int = Depends(get_current_user_id)):
+def delete_task(
+    task_id: int, 
+    current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token)
+):
+    # アクセス権チェック
+    if not check_task_permission(task_id, current_user_id, token):
+        raise HTTPException(status_code=404, detail={"message": "task not found"})
+    
     with get_conn() as conn:
         with conn.cursor() as cur:
             # 関連(daily_plans)は外部キーでON DELETE CASCADEを採用
-            cur.execute("DELETE FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
+            cur.execute("DELETE FROM tasks WHERE task_id=%s", (task_id,))
             if cur.rowcount == 0:
                 raise HTTPException(status_code=404, detail={"message": "task not found"})
     return {"ok": True}
@@ -295,13 +365,14 @@ def get_daily_plans(
     from_: Optional[date] = Query(default=None, alias="from"),
     to: Optional[date] = None,
     current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token),
 ):
+    # アクセス権チェック
+    if not check_task_permission(task_id, current_user_id, token):
+        raise HTTPException(status_code=404, detail={"message": "task not found"})
+    
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # 所有確認
-            cur.execute("SELECT 1 FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
-            if cur.fetchone() is None:
-                raise HTTPException(status_code=404, detail={"message": "task not found"})
             query = (
                 "SELECT daily_time_plan_id, task_id, created_by, target_date, work_plan_value, time_plan_value, created_at, updated_at "
                 "FROM daily_plans WHERE task_id=%s"
@@ -336,15 +407,20 @@ def put_daily_plans_bulk(
     task_id: int,
     items: List[DailyPlanBulkItem],
     current_user_id: int = Depends(get_current_user_id),
+    token: str = Depends(get_auth_token),
 ):
+    # アクセス権チェック
+    if not check_task_permission(task_id, current_user_id, token):
+        raise HTTPException(status_code=404, detail={"message": "task not found"})
+    
     # 仕様: Σ(work_plan_value)=100, Σ(time_plan_value)=tasks.target_time
     with get_conn() as conn:
         # 差分適用を原子的に行いたいのでトランザクションを明示管理
         conn.autocommit = False
         try:
             with conn.cursor() as cur:
-                # タスク所有と目標時間の取得
-                cur.execute("SELECT target_time FROM tasks WHERE task_id=%s AND created_by=%s", (task_id, current_user_id))
+                # タスクの目標時間を取得
+                cur.execute("SELECT target_time FROM tasks WHERE task_id=%s", (task_id,))
                 r = cur.fetchone()
                 if r is None:
                     conn.rollback()
