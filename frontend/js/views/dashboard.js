@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { initDashboardPlanChart } from './components/dashboard_plan_chart.js';
+import { initTaskStatusPieChart } from './components/task_status_pie_chart.js';
 
 export async function DashboardView() {
   let summary = null; 
@@ -18,23 +19,42 @@ export async function DashboardView() {
     if (chartEl) {
       initDashboardPlanChart({ el: chartEl, planItems: planData, recordItems: recordData });
     }
+    
+    const pieChartEl = document.getElementById('task-status-pie-chart');
+    if (pieChartEl && summary) {
+      initTaskStatusPieChart({ 
+        el: pieChartEl, 
+        activeCount: summary.active_tasks || 0, 
+        laggingCount: summary.lagging_tasks_count || 0 
+      });
+    }
   }, 100);
 
   return `
   <div class="row">
     <div class="col">
-      <div class="card">
-        <h3>サマリ</h3>
-        ${summary ? `
-          <div class="row">
-            <div class="col"><div class="kpi">${summary.active_tasks ?? '-'}</div><div class="helper">進行中タスク</div></div>
-            <div class="col"><div class="kpi">${summary.completed_tasks_total ?? '-'}</div><div class="helper">累計完了</div></div>
-            <div class="col"><div class="kpi">${summary.completed_tasks_this_month ?? '-'}</div><div class="helper">今月完了</div></div>
-            <div class="col"><div class="kpi">${summary.lagging_tasks_count ?? '-'}</div><div class="helper">遅延タスク</div></div>
-            <div class="col"><div class="kpi">${summary.work_time_this_month ?? '-'}</div><div class="helper">今月作業時間(分)</div></div>
-            <div class="col"><div class="kpi">${summary.work_time_total ?? '-'}</div><div class="helper">累計作業時間(分)</div></div>
+      <div class="row">
+        <div class="col" style="flex: 2;">
+          <div class="card">
+            <h3>サマリ</h3>
+            ${summary ? `
+              <div class="row">
+                <div class="col"><div class="kpi">${summary.active_tasks ?? '-'}</div><div class="helper">進行中タスク</div></div>
+                <div class="col"><div class="kpi">${summary.completed_tasks_total ?? '-'}</div><div class="helper">累計完了</div></div>
+                <div class="col"><div class="kpi">${summary.completed_tasks_this_month ?? '-'}</div><div class="helper">今月完了</div></div>
+                <div class="col"><div class="kpi">${summary.lagging_tasks_count ?? '-'}</div><div class="helper">遅延タスク</div></div>
+                <div class="col"><div class="kpi">${summary.work_time_this_month ?? '-'}</div><div class="helper">今月作業時間(分)</div></div>
+                <div class="col"><div class="kpi">${summary.work_time_total ?? '-'}</div><div class="helper">累計作業時間(分)</div></div>
+              </div>
+            ` : '<div class="helper">サマリ取得に失敗しました</div>'}
           </div>
-        ` : '<div class="helper">サマリ取得に失敗しました</div>'}
+        </div>
+        <div class="col" style="flex: 1;">
+          <div class="card">
+            <h3>タスク状態</h3>
+            <div id="task-status-pie-chart" style="width:100%; height:250px;"></div>
+          </div>
+        </div>
       </div>
       
       <div class="card">
