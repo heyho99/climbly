@@ -148,3 +148,32 @@ async def daily_plan_aggregate(
         pass
     
     return []
+
+
+@router.get("/dashboard/daily_record_aggregate")
+async def daily_record_aggregate(
+    from_date: str = Query(default=None, alias="from"),
+    to_date: str = Query(default=None, alias="to"),
+    auth_header: dict = Depends(get_auth_header)
+):
+    """日次実績の集計を取得（ダッシュボード用）"""
+    try:
+        async with httpx.AsyncClient() as client:
+            params = {}
+            if from_date:
+                params["from"] = from_date
+            if to_date:
+                params["to"] = to_date
+            
+            response = await client.get(
+                "http://record-service/v1/records/daily_aggregate",
+                params=params,
+                headers=auth_header,
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                return response.json()
+    except Exception:
+        pass
+    
+    return []

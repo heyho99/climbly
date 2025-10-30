@@ -1,10 +1,15 @@
-// 累積作業時間予定グラフ（ダッシュボード用・読み取り専用）
-// API: initDashboardPlanChart({ el, items })
+// 日次作業時間グラフ（ダッシュボード用・計画と実績を表示）
+// API: initDashboardPlanChart({ el, planItems, recordItems })
 // - el: チャートを描画するDOM要素
-// - items: [{ target_date, total_time_plan }]
+// - planItems: [{ target_date, total_time_plan }]
+// - recordItems: [{ target_date, total_work_time }]
 
-export function initDashboardPlanChart({ el, items }) {
+export function initDashboardPlanChart({ el, planItems = [], recordItems = [] }) {
     if (!el) return;
+    
+    // デバッグ用ログ
+    console.log('[DashboardPlanChart] planItems:', planItems);
+    console.log('[DashboardPlanChart] recordItems:', recordItems);
     
     // 既存のインスタンスがあれば破棄
     if (el._destroyChart) {
@@ -16,8 +21,8 @@ export function initDashboardPlanChart({ el, items }) {
     }
     
     // データがない場合
-    if (!items || items.length === 0) {
-      el.innerHTML = '<div class="helper">計画データがありません</div>';
+    if ((!planItems || planItems.length === 0) && (!recordItems || recordItems.length === 0)) {
+      el.innerHTML = '<div class="helper">データがありません</div>';
       return;
     }
     
@@ -25,20 +30,48 @@ export function initDashboardPlanChart({ el, items }) {
     const chart = echarts.init(el);
     el._echarts = chart;
     
-    // データ変換
-    const dates = items.map(d => d.target_date);
-    const values = items.map(d => Number(d.total_time_plan || 0));
+    // 全ての日付を取得してソート
+    const allDates = new Set();
+    planItems.forEach(d => allDates.add(d.target_date));
+    recordItems.forEach(d => allDates.add(d.target_date));
+    const dates = Array.from(allDates).sort();
+    
+    // 計画データをマップに変換
+    const planMap = {};
+    planItems.forEach(d => {
+        planMap[d.target_date] = Number(d.total_time_plan || 0);
+    });
+    
+    // 実績データをマップに変換
+    const recordMap = {};
+    recordItems.forEach(d => {
+        recordMap[d.target_date] = Number(d.total_work_time || 0);
+    });
+    
+    // 各日付の値を取得（累積計算なし）
+    const planValues = dates.map(date => planMap[date] || 0);
+    const recordValues = dates.map(date => recordMap[date] || 0);
     
     // グラフオプション
     const option = {
         tooltip: { 
             trigger: 'axis',
-            formatter: '{b}<br/>計画時間: {c}分'
+            formatter: function(params) {
+                let result = params[0].name + '<br/>';
+                params.forEach(param => {
+                    result += param.marker + param.seriesName + ': ' + param.value + '分<br/>';
+                });
+                return result;
+            }
+        },
+        legend: {
+            data: ['計画時間', '実績時間'],
+            top: 5
         },
         grid: { 
             left: 60, 
             right: 30, 
-            top: 30, 
+            top: 50, 
             bottom: 60 
         },
         dataZoom: [
@@ -52,35 +85,62 @@ export function initDashboardPlanChart({ el, items }) {
         },
         yAxis: { 
             type: 'value', 
-            name: '計画時間(分)', 
+            name: '作業時間(分)', 
             min: 0,
             minInterval: 1
         },
-        series: [{
-            name: '計画時間',
-            type: 'line',
-            smooth: false,
-            symbol: 'circle',
-            symbolSize: 6,
-            data: values,
-            areaStyle: { 
-                color: {
-                    type: 'linear',
-                    x: 0, y: 0, x2: 0, y2: 1,
-                    colorStops: [
-                        { offset: 0, color: 'rgba(58, 77, 233, 0.3)' },
-                        { offset: 1, color: 'rgba(58, 77, 233, 0.05)' }
-                    ]
+        series: [
+            {
+                name: '計画時間',
+                type: 'line',
+                smooth: false,
+                symbol: 'circle',
+                symbolSize: 6,
+                data: planValues,
+                areaStyle: { 
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(79, 70, 229, 0.2)' },
+                            { offset: 1, color: 'rgba(79, 70, 229, 0.05)' }
+                        ]
+                    }
+                },
+                lineStyle: {
+                    color: 'rgba(79, 70, 229, 1)',
+                    width: 2
+                },
+                itemStyle: {
+                    color: 'rgba(79, 70, 229, 1)'
                 }
             },
-            lineStyle: {
-                color: 'rgba(58, 77, 233, 1)',
-                width: 2
-            },
-            itemStyle: {
-                color: 'rgba(58, 77, 233, 1)'
+            {
+                name: '実績時間',
+                type: 'line',
+                smooth: false,
+                symbol: 'circle',
+                symbolSize: 6,
+                data: recordValues,
+                areaStyle: { 
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(16, 185, 129, 0.2)' },
+                            { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+                        ]
+                    }
+                },
+                lineStyle: {
+                    color: 'rgba(16, 185, 129, 1)',
+                    width: 2
+                },
+                itemStyle: {
+                    color: 'rgba(16, 185, 129, 1)'
+                }
             }
-        }]
+        ]
     };
     
     chart.setOption(option);

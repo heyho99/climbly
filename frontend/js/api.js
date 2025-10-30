@@ -44,6 +44,10 @@ export const api = {
     const qs = toQuery(params);
     return request(`/dashboard/daily_plan_aggregate${qs}`);
   },
+  async dashboardDailyRecordAggregate(params={}) {
+    const qs = toQuery(params);
+    return request(`/dashboard/daily_record_aggregate${qs}`);
+  },
 
   // Tasks
   async listTasks(params={}) {

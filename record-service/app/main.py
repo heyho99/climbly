@@ -115,6 +115,49 @@ def list_records(
             ]
 
 
+@app.get("/v1/records/daily_aggregate")
+def get_daily_aggregate(
+    from_date: Optional[str] = Query(default=None, alias="from"),
+    to_date: Optional[str] = Query(default=None, alias="to"),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """日次実績作業時間の集計を取得（ダッシュボード用）
+    各日付の実績作業時間の合計を返す（累積ではない）
+    """
+    query = """
+        SELECT DATE(start_at) as target_date, COALESCE(SUM(work_time), 0) as total_work_time
+        FROM record_works
+        WHERE created_by = %s
+    """
+    params = [current_user_id]
+    
+    if from_date:
+        query += " AND DATE(start_at) >= %s"
+        params.append(from_date)
+    if to_date:
+        query += " AND DATE(start_at) <= %s"
+        params.append(to_date)
+    
+    query += " GROUP BY DATE(start_at) ORDER BY target_date ASC"
+    
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            
+            result = []
+            for row in rows:
+                if row[0]:
+                    # dateオブジェクトをYYYY-MM-DD形式の文字列に変換
+                    target_date = row[0].strftime('%Y-%m-%d') if hasattr(row[0], 'strftime') else str(row[0])
+                    result.append({
+                        "target_date": target_date,
+                        "total_work_time": int(row[1])
+                    })
+            
+            return result
+
+
 @app.get("/v1/records/by_task")
 def list_records_by_task(
     task_id: Optional[int] = Query(default=None),

@@ -5,16 +5,21 @@ export async function DashboardView() {
   let summary = null; 
   let laggards = [];
   let planData = [];
+  let recordData = [];
   
   try { summary = await api.dashboardSummary(); } catch {} // bffの/dashboard/summary
   try { laggards = await api.laggingTasks(); } catch {} // bffの/dashboard/lagging_tasks
-  try { planData = await api.dashboardDailyPlanAggregate(); } catch {} // bffの/dashboard/daily_plan_aggregate
+  try { planData = await api.dashboardDailyPlanAggregate(); } catch (e) { console.error('Plan data error:', e); } // bffの/dashboard/daily_plan_aggregate
+  try { recordData = await api.dashboardDailyRecordAggregate(); } catch (e) { console.error('Record data error:', e); } // bffの/dashboard/daily_record_aggregate
+
+  console.log('[Dashboard] planData:', planData);
+  console.log('[Dashboard] recordData:', recordData);
 
   // グラフ初期化（DOM生成後）
   setTimeout(() => {
     const chartEl = document.getElementById('dashboard-plan-chart');
     if (chartEl) {
-      initDashboardPlanChart({ el: chartEl, items: planData });
+      initDashboardPlanChart({ el: chartEl, planItems: planData, recordItems: recordData });
     }
   }, 100);
 
@@ -35,7 +40,7 @@ export async function DashboardView() {
       </div>
       
       <div class="card">
-        <h3>累積作業時間予定</h3>
+        <h3>日次作業時間（計画と実績）</h3>
         <div id="dashboard-plan-chart" style="width:100%; height:300px;"></div>
       </div>
       
