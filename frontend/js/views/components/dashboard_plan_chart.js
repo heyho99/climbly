@@ -7,10 +7,6 @@
 export function initDashboardPlanChart({ el, planItems = [], recordItems = [] }) {
     if (!el) return;
     
-    // デバッグ用ログ
-    console.log('[DashboardPlanChart] planItems:', planItems);
-    console.log('[DashboardPlanChart] recordItems:', recordItems);
-    
     // 既存のインスタンスがあれば破棄
     if (el._destroyChart) {
       try { el._destroyChart(); } catch {}

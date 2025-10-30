@@ -9,11 +9,8 @@ export async function DashboardView() {
   
   try { summary = await api.dashboardSummary(); } catch {} // bffの/dashboard/summary
   try { laggards = await api.laggingTasks(); } catch {} // bffの/dashboard/lagging_tasks
-  try { planData = await api.dashboardDailyPlanAggregate(); } catch (e) { console.error('Plan data error:', e); } // bffの/dashboard/daily_plan_aggregate
-  try { recordData = await api.dashboardDailyRecordAggregate(); } catch (e) { console.error('Record data error:', e); } // bffの/dashboard/daily_record_aggregate
-
-  console.log('[Dashboard] planData:', planData);
-  console.log('[Dashboard] recordData:', recordData);
+  try { planData = await api.dashboardDailyPlanAggregate(); } catch {} // bffの/dashboard/daily_plan_aggregate
+  try { recordData = await api.dashboardDailyRecordAggregate(); } catch {} // bffの/dashboard/daily_record_aggregate
 
   // グラフ初期化（DOM生成後）
   setTimeout(() => {
