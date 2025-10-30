@@ -30,6 +30,7 @@ export async function DashboardView() {
             <div class="col"><div class="kpi">${summary.active_tasks ?? '-'}</div><div class="helper">進行中タスク</div></div>
             <div class="col"><div class="kpi">${summary.completed_tasks_total ?? '-'}</div><div class="helper">累計完了</div></div>
             <div class="col"><div class="kpi">${summary.completed_tasks_this_month ?? '-'}</div><div class="helper">今月完了</div></div>
+            <div class="col"><div class="kpi">${summary.lagging_tasks_count ?? '-'}</div><div class="helper">遅延タスク</div></div>
             <div class="col"><div class="kpi">${summary.work_time_this_month ?? '-'}</div><div class="helper">今月作業時間(分)</div></div>
             <div class="col"><div class="kpi">${summary.work_time_total ?? '-'}</div><div class="helper">累計作業時間(分)</div></div>
           </div>

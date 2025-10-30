@@ -103,22 +103,103 @@ async def summary(auth_header: dict = Depends(get_auth_header)):
         # 予期しないエラーの場合は0を返す
         pass
     
+    # 遅延タスク数を取得
+    lagging_tasks_count = 0
+    try:
+        # lagging_tasksエンドポイントから遅延数を取得
+        lagging_data = await lagging_tasks(auth_header)
+        lagging_tasks_count = len(lagging_data) if lagging_data else 0
+    except Exception:
+        pass
+    
     return {
         "active_tasks": active_tasks,
         "completed_tasks_total": completed_tasks_total,
         "completed_tasks_this_month": completed_tasks_this_month,
         "work_time_this_month": work_time_this_month,
         "work_time_total": work_time_total,
+        "lagging_tasks_count": lagging_tasks_count,
     }
 
 
 @router.get("/dashboard/lagging_tasks")
-def lagging_tasks():
-    # TODO: task-service + daily_plans + record_works から遅れ計算
-    return [
-        {"task_id": 10, "task_name": "英語学習", "progress_gap": "progress behind plan", "time_gap": 60},
-        {"task_id": 22, "task_name": "ブログ執筆", "progress_gap": "work time behind plan", "time_gap": 120},
-    ]
+async def lagging_tasks(auth_header: dict = Depends(get_auth_header)):
+    """遅延タスクを取得"""
+    lagging = []
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # 1. 進行中タスクを取得
+            tasks_response = await client.get(
+                "http://task-service/v1/tasks",
+                params={"mine": "true", "status": "active"},
+                headers=auth_header,
+                timeout=10.0
+            )
+            
+            if tasks_response.status_code != 200:
+                return []
+            
+            tasks = tasks_response.json()
+            
+            # 2. 各タスクの遅延を並列で計算
+            async def check_task_lag(task):
+                task_id = task["task_id"]
+                task_name = task.get("task_name", "")
+                
+                # 計画進捗と実績進捗を並列取得
+                plan_response, record_response = await asyncio.gather(
+                    client.get(
+                        "http://task-service/v1/daily_plans/latest_progress",
+                        params={"task_id": task_id},
+                        headers=auth_header,
+                        timeout=10.0
+                    ),
+                    client.get(
+                        "http://record-service/v1/records/latest_progress",
+                        params={"task_id": task_id},
+                        headers=auth_header,
+                        timeout=10.0
+                    ),
+                    return_exceptions=True
+                )
+                
+                # デフォルト値
+                work_plan_value = 0
+                progress_value = 0
+                
+                if not isinstance(plan_response, Exception) and plan_response.status_code == 200:
+                    work_plan_value = plan_response.json().get("work_plan_value", 0)
+                
+                if not isinstance(record_response, Exception) and record_response.status_code == 200:
+                    progress_value = record_response.json().get("progress_value", 0)
+                
+                # 遅延判定: work_plan_value > progress_value
+                progress_gap = progress_value - work_plan_value
+                
+                if work_plan_value > progress_value:
+                    return {
+                        "task_id": task_id,
+                        "task_name": task_name,
+                        "progress_gap": progress_gap,
+                        "work_plan_value": work_plan_value,
+                        "progress_value": progress_value
+                    }
+                return None
+            
+            # 全タスクを並列処理
+            results = await asyncio.gather(
+                *[check_task_lag(task) for task in tasks],
+                return_exceptions=True
+            )
+            
+            # 遅延タスクのみフィルタ
+            lagging = [r for r in results if r is not None and not isinstance(r, Exception)]
+    
+    except Exception:
+        return []
+    
+    return lagging
 
 
 @router.get("/dashboard/daily_plan_aggregate")

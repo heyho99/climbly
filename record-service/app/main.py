@@ -115,6 +115,32 @@ def list_records(
             ]
 
 
+@app.get("/v1/records/latest_progress")
+def get_latest_progress(
+    task_id: int = Query(...),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """タスクの最新実績進捗を取得"""
+    query = """
+        SELECT progress_value, start_at
+        FROM record_works
+        WHERE task_id = %s AND created_by = %s
+        ORDER BY start_at DESC
+        LIMIT 1
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, [task_id, current_user_id])
+            row = cur.fetchone()
+            if row:
+                return {
+                    "task_id": task_id,
+                    "progress_value": int(row[0]) if row[0] else 0,
+                    "start_at": row[1].isoformat() if row[1] else None
+                }
+            return {"task_id": task_id, "progress_value": 0, "start_at": None}
+
+
 @app.get("/v1/records/daily_aggregate")
 def get_daily_aggregate(
     from_date: Optional[str] = Query(default=None, alias="from"),
