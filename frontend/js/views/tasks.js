@@ -4,6 +4,23 @@ import { api } from '../api.js';
 import { navigateTo } from '../router.js';
 import { initDailyPlanChart } from './components/daily_plan_chart.js';
 
+const STATUS_DEFINITIONS = {
+  active: { label: 'アクティブ', badgeClass: 'badge-success' },
+  completed: { label: '完了', badgeClass: 'badge-info' },
+  paused: { label: '一時停止', badgeClass: 'badge-warning' },
+  cancelled: { label: 'キャンセル', badgeClass: 'badge-danger' },
+};
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * 予定と実績データをマージする
  * @param {Array} plans - daily_plans配列
@@ -54,14 +71,15 @@ export async function TasksView() {
 
   // ステータス表示用の関数
   const getStatusBadge = (status) => {
-    const statusMap = {
-      'active': '<span class="badge badge-success">アクティブ</span>',
-      'completed': '<span class="badge badge-info">完了</span>',
-      'paused': '<span class="badge badge-warning">一時停止</span>',
-      'cancelled': '<span class="badge badge-danger">キャンセル</span>'
-    };
-    return statusMap[status] || '<span class="badge badge-secondary">不明</span>';
+    const def = STATUS_DEFINITIONS[status];
+    if (!def) {
+      return '<span class="badge badge-secondary">不明</span>';
+    }
+    return `<span class="badge ${def.badgeClass}">${def.label}</span>`;
   };
+
+  const categoryOptions = Array.from(new Set(items.map(t => t.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
+  const statusOptions = Object.entries(STATUS_DEFINITIONS);
 
   return `
   <div class="tasks-container">
@@ -73,8 +91,26 @@ export async function TasksView() {
         <button class="btn" id="btn-new-task">新規作成</button>
       </div>
     </div>
+
+    <div class="tasks-filters">
+      <div class="tasks-filter-group">
+        <label for="filter-category">カテゴリ</label>
+        <select id="filter-category">
+          <option value="">すべて</option>
+          ${categoryOptions.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="tasks-filter-group">
+        <label for="filter-status">ステータス</label>
+        <select id="filter-status">
+          <option value="">すべて</option>
+          ${statusOptions.map(([value, def]) => `<option value="${value}">${escapeHtml(def.label)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
     
     ${!items.length ? '<div class="helper">タスクがありません</div>' : ''}
+    <div class="helper hidden" id="tasks-filter-empty">該当するタスクがありません</div>
     
     <div class="tasks-list">
       ${items.map(t => `
@@ -145,6 +181,10 @@ export async function setupTasksEvents() {
     };
   }
 
+  const categorySelect = document.getElementById('filter-category');
+  const statusSelect = document.getElementById('filter-status');
+  const filterEmptyMessage = document.getElementById('tasks-filter-empty');
+
   const expandAllBtn = document.getElementById('btn-expand-all');
   if (expandAllBtn) {
     expandAllBtn.onclick = (e) => {
@@ -159,6 +199,18 @@ export async function setupTasksEvents() {
       e.preventDefault();
       collapseAllCharts();
     };
+  }
+
+  if (categorySelect) {
+    categorySelect.addEventListener('change', () => {
+      applyFilters().catch(err => console.error('Failed to apply category filter:', err));
+    });
+  }
+
+  if (statusSelect) {
+    statusSelect.addEventListener('change', () => {
+      applyFilters().catch(err => console.error('Failed to apply status filter:', err));
+    });
   }
 
   // 編集ボタン
@@ -299,6 +351,8 @@ export async function setupTasksEvents() {
   function expandAllCharts() {
     document.querySelectorAll('.task-chart-toggle').forEach(btn => {
       const taskId = btn.getAttribute('data-task-toggle');
+      const card = btn.closest('.task-card');
+      if (!card || card.classList.contains('hidden')) return;
       if (!taskId) return;
       const state = chartState.get(taskId) || { initialized: false, expanded: false };
       if (!state.expanded) {
@@ -310,12 +364,61 @@ export async function setupTasksEvents() {
   function collapseAllCharts() {
     document.querySelectorAll('.task-chart-toggle').forEach(btn => {
       const taskId = btn.getAttribute('data-task-toggle');
+      const card = btn.closest('.task-card');
+      if (!card || card.classList.contains('hidden')) return;
       if (!taskId) return;
       const state = chartState.get(taskId) || { initialized: false, expanded: false };
       if (state.expanded) {
         handleToggle(btn);
       }
     });
+  }
+
+  async function applyFilters() {
+    const selectedCategory = categorySelect ? categorySelect.value : '';
+    const selectedStatus = statusSelect ? statusSelect.value : '';
+    const tasks = await ensureTaskData();
+    const taskMap = new Map(tasks.map(t => [String(t.task_id), t]));
+    const cards = document.querySelectorAll('.task-card');
+
+    let anyVisible = false;
+
+    cards.forEach(card => {
+      const taskId = card.getAttribute('data-task-id');
+      const task = taskMap.get(String(taskId));
+      let visible = true;
+
+      if (selectedCategory && (!task || (task.category || '') !== selectedCategory)) {
+        visible = false;
+      }
+      if (visible && selectedStatus && (!task || (task.status || '') !== selectedStatus)) {
+        visible = false;
+      }
+
+      card.classList.toggle('hidden', !visible);
+
+      if (!visible && taskId) {
+        const toggleBtn = card.querySelector('.task-chart-toggle');
+        const chartsBody = card.querySelector('[data-task-charts]');
+        if (chartsBody) {
+          chartsBody.classList.add('collapsed');
+        }
+        if (toggleBtn) {
+          toggleBtn.setAttribute('aria-expanded', 'false');
+          toggleBtn.textContent = 'グラフを表示';
+        }
+        destroyCharts(taskId);
+      }
+
+      if (visible) {
+        anyVisible = true;
+      }
+    });
+
+    if (filterEmptyMessage) {
+      const hasTasks = cards.length > 0;
+      filterEmptyMessage.classList.toggle('hidden', !hasTasks || anyVisible);
+    }
   }
 
   document.querySelectorAll('.task-chart-toggle').forEach(btn => {
@@ -325,6 +428,8 @@ export async function setupTasksEvents() {
       chartState.set(taskId, { initialized: false, expanded: false });
     }
   });
+
+  await applyFilters();
 
   // 初期表示中のグラフを生成
   const tasks = await ensureTaskData();

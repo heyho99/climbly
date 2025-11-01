@@ -375,6 +375,24 @@ label { display:block; margin: 12px 0 6px; font-size: 14px; color: var(--text); 
   gap: 8px;
 }
 
+.tasks-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.tasks-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.tasks-filter-group select {
+  min-width: 160px;
+}
+
 .tasks-header h2 {
   margin: 0;
   color: var(--text);
