@@ -437,7 +437,43 @@ label { display:block; margin: 12px 0 6px; font-size: 14px; color: var(--text); 
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin-top: 16px;
+}
+
+.task-charts-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.task-chart-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.task-chart-toggle:hover,
+.task-chart-toggle:focus-visible {
+  background: rgba(31, 41, 55, 0.05);
+  color: var(--text);
+}
+
+.task-charts-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: max-height 0.3s ease;
+  max-height: 1000px;
+}
+
+.task-charts-body.collapsed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .chart-section {

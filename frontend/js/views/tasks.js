@@ -103,13 +103,25 @@ export async function TasksView() {
           </div>
           
           <div class="task-charts">
-            <div class="chart-section">
-              <h4>作業進捗予定 (Work %)</h4>
-              <div class="chart-container" id="chart-work-${t.task_id}" style="height: 150px;"></div>
+            <div class="task-charts-header">
+              <button
+                type="button"
+                class="task-chart-toggle"
+                data-task-toggle="${t.task_id}"
+                aria-expanded="false"
+              >
+                グラフを表示
+              </button>
             </div>
-            <div class="chart-section">
-              <h4>時間予定 (Time)</h4>
-              <div class="chart-container" id="chart-time-${t.task_id}" style="height: 150px;"></div>
+            <div class="task-charts-body collapsed" data-task-charts="${t.task_id}">
+              <div class="chart-section">
+                <h4>作業進捗予定 (Work %)</h4>
+                <div class="chart-container" id="chart-work-${t.task_id}" style="height: 150px;"></div>
+              </div>
+              <div class="chart-section">
+                <h4>時間予定 (Time)</h4>
+                <div class="chart-container" id="chart-time-${t.task_id}" style="height: 150px;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -159,40 +171,37 @@ export async function setupTasksEvents() {
     };
   });
 
-  // グラフの初期化
-  // 各タスクカードからdaily_plansとdaily_actualsを取得してグラフを描画
-  let data = { items: [] };
-  try { 
-    data = await api.listTasks({ page: 1, per_page: 50, include_daily_plans: true, include_actuals: true }); 
-  } catch (err) {
-    console.error('Failed to load tasks for charts:', err);
-    return;
-  }
-  const items = Array.isArray(data) ? data : (data.items || []);
+  const chartState = new Map();
+  let tasksResponse = null;
 
-  items.forEach(task => {
-    if (!task || !task.task_id) {
-      console.warn('Invalid task object:', task);
-      return;
+  async function ensureTaskData() {
+    if (tasksResponse) return tasksResponse;
+    try {
+      const data = await api.listTasks({ page: 1, per_page: 50, include_daily_plans: true, include_actuals: true });
+      tasksResponse = Array.isArray(data) ? data : (data.items || []);
+    } catch (err) {
+      console.error('Failed to load tasks for charts:', err);
+      tasksResponse = [];
     }
-    
+    return tasksResponse;
+  }
+
+  function buildCharts(task) {
+    if (!task || !task.task_id) return;
+
     const dailyPlans = task.daily_plans || [];
     const dailyActuals = task.daily_actuals || [];
-    
-    // 予定と実績をマージ
+
     const mergedData = mergePlanAndActual(dailyPlans, dailyActuals);
-    
-    // データがない場合はスキップ
     if (mergedData.length === 0) {
       return;
     }
-    
-    // 作業進捗グラフ（予定+実績）
+
+    const hasActuals = dailyActuals.length > 0;
+
     const workChartEl = document.getElementById(`chart-work-${task.task_id}`);
     if (workChartEl) {
       try {
-        // 実績データがある場合は予定と実績を両方表示、ない場合は予定のみ
-        const hasActuals = dailyActuals.length > 0;
         initDailyPlanChart({
           el: workChartEl,
           items: mergedData,
@@ -203,13 +212,10 @@ export async function setupTasksEvents() {
         console.error(`Failed to init work chart for task ${task.task_id}:`, err);
       }
     }
-    
-    // 時間グラフ（予定+実績）
+
     const timeChartEl = document.getElementById(`chart-time-${task.task_id}`);
     if (timeChartEl) {
       try {
-        // 実績データがある場合は予定と実績を両方表示、ない場合は予定のみ
-        const hasActuals = dailyActuals.length > 0;
         initDailyPlanChart({
           el: timeChartEl,
           items: mergedData,
@@ -219,6 +225,73 @@ export async function setupTasksEvents() {
       } catch (err) {
         console.error(`Failed to init time chart for task ${task.task_id}:`, err);
       }
+    }
+
+    chartState.set(String(task.task_id), { initialized: true, expanded: true });
+  }
+
+  function destroyCharts(taskId) {
+    const workChartEl = document.getElementById(`chart-work-${taskId}`);
+    if (workChartEl && workChartEl._destroyChart) {
+      try { workChartEl._destroyChart(); } catch {}
+    }
+    const timeChartEl = document.getElementById(`chart-time-${taskId}`);
+    if (timeChartEl && timeChartEl._destroyChart) {
+      try { timeChartEl._destroyChart(); } catch {}
+    }
+    chartState.set(taskId, { initialized: false, expanded: false });
+  }
+
+  function handleToggle(button) {
+    const taskId = button.getAttribute('data-task-toggle');
+    if (!taskId) return;
+
+    const body = document.querySelector(`[data-task-charts="${taskId}"]`);
+    if (!body) return;
+
+    const currentState = chartState.get(taskId) || { initialized: false, expanded: false };
+    const willExpand = !currentState.expanded;
+
+    if (willExpand) {
+      body.classList.remove('collapsed');
+      button.setAttribute('aria-expanded', 'true');
+      button.textContent = 'グラフを隠す';
+
+      requestAnimationFrame(async () => {
+        const tasks = await ensureTaskData();
+        const targetTask = tasks.find(t => String(t.task_id) === String(taskId));
+        if (!targetTask) return;
+
+        if (!currentState.initialized) {
+          buildCharts(targetTask);
+          chartState.set(taskId, { initialized: true, expanded: true });
+        } else {
+          window.dispatchEvent(new Event('resize'));
+          chartState.set(taskId, { ...currentState, expanded: true });
+        }
+      });
+    } else {
+      body.classList.add('collapsed');
+      button.setAttribute('aria-expanded', 'false');
+      button.textContent = 'グラフを表示';
+      destroyCharts(taskId);
+    }
+  }
+
+  document.querySelectorAll('.task-chart-toggle').forEach(btn => {
+    btn.addEventListener('click', () => handleToggle(btn));
+    const taskId = btn.getAttribute('data-task-toggle');
+    if (taskId && !chartState.has(taskId)) {
+      chartState.set(taskId, { initialized: false, expanded: false });
+    }
+  });
+
+  // 初期表示中のグラフを生成
+  const tasks = await ensureTaskData();
+  tasks.forEach(task => {
+    const body = document.querySelector(`[data-task-charts="${task.task_id}"]`);
+    if (body && !body.classList.contains('collapsed')) {
+      buildCharts(task);
     }
   });
 }
