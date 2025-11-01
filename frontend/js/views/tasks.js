@@ -197,15 +197,13 @@ export async function setupTasksEvents() {
       return;
     }
 
-    const hasActuals = dailyActuals.length > 0;
-
     const workChartEl = document.getElementById(`chart-work-${task.task_id}`);
     if (workChartEl) {
       try {
         initDailyPlanChart({
           el: workChartEl,
           items: mergedData,
-          series: hasActuals ? ['work_plan', 'work_actual'] : ['work_plan'],
+          series: ['work_plan', 'work_actual'],
           readOnly: true
         });
       } catch (err) {
@@ -219,7 +217,7 @@ export async function setupTasksEvents() {
         initDailyPlanChart({
           el: timeChartEl,
           items: mergedData,
-          series: hasActuals ? ['time_plan', 'time_actual'] : ['time_plan'],
+          series: ['time_plan', 'time_actual'],
           readOnly: true
         });
       } catch (err) {
