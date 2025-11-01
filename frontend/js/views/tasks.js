@@ -67,7 +67,11 @@ export async function TasksView() {
   <div class="tasks-container">
     <div class="tasks-header">
       <h2>タスク一覧</h2>
-      <button class="btn" id="btn-new-task">新規作成</button>
+      <div class="tasks-header-actions">
+        <button type="button" class="btn secondary" id="btn-expand-all">すべて展開</button>
+        <button type="button" class="btn secondary" id="btn-collapse-all">すべて折りたたむ</button>
+        <button class="btn" id="btn-new-task">新規作成</button>
+      </div>
     </div>
     
     ${!items.length ? '<div class="helper">タスクがありません</div>' : ''}
@@ -138,6 +142,22 @@ export async function setupTasksEvents() {
     newTaskBtn.onclick = (e) => {
       e.preventDefault();
       navigateTo('/tasks/new');
+    };
+  }
+
+  const expandAllBtn = document.getElementById('btn-expand-all');
+  if (expandAllBtn) {
+    expandAllBtn.onclick = (e) => {
+      e.preventDefault();
+      expandAllCharts();
+    };
+  }
+
+  const collapseAllBtn = document.getElementById('btn-collapse-all');
+  if (collapseAllBtn) {
+    collapseAllBtn.onclick = (e) => {
+      e.preventDefault();
+      collapseAllCharts();
     };
   }
 
@@ -274,6 +294,28 @@ export async function setupTasksEvents() {
       button.textContent = 'グラフを表示';
       destroyCharts(taskId);
     }
+  }
+
+  function expandAllCharts() {
+    document.querySelectorAll('.task-chart-toggle').forEach(btn => {
+      const taskId = btn.getAttribute('data-task-toggle');
+      if (!taskId) return;
+      const state = chartState.get(taskId) || { initialized: false, expanded: false };
+      if (!state.expanded) {
+        handleToggle(btn);
+      }
+    });
+  }
+
+  function collapseAllCharts() {
+    document.querySelectorAll('.task-chart-toggle').forEach(btn => {
+      const taskId = btn.getAttribute('data-task-toggle');
+      if (!taskId) return;
+      const state = chartState.get(taskId) || { initialized: false, expanded: false };
+      if (state.expanded) {
+        handleToggle(btn);
+      }
+    });
   }
 
   document.querySelectorAll('.task-chart-toggle').forEach(btn => {
