@@ -66,6 +66,11 @@ function updateSidebarUI(authed) {
 
   const marginLeft = authed ? (isSidebarCollapsed ? '64px' : '260px') : '0';
   mainContent.style.marginLeft = marginLeft;
+
+  // レイアウト変更を反映するため、次フレームでリサイズイベントを発火
+  requestAnimationFrame(() => {
+    window.dispatchEvent(new Event('resize'));
+  });
 }
 
 function collapseSidebar() {
