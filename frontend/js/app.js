@@ -8,24 +8,103 @@ import { TaskFormView, setupTaskFormEvents } from './views/task_form.js';
 import { RecordsView, setupRecordsEvents } from './views/records.js';
 import { RecordsBoardView, setupRecordsBoardEvents } from './views/records_board.js';
 
+const SIDEBAR_COLLAPSED_KEY = 'climbly.sidebarCollapsed';
+let isSidebarCollapsed = false;
+
+try {
+  isSidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+} catch (error) {
+  isSidebarCollapsed = false;
+}
+
+function persistSidebarState() {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed));
+  } catch (error) {
+    // noop: ローカルストレージが使用できない場合は記憶しない
+  }
+}
+
+function updateSidebarUI(authed) {
+  const body = document.body;
+  const sidebar = document.getElementById('app-sidebar');
+  const mainContent = document.querySelector('.main-content');
+  const collapseButton = document.getElementById('sidebar-collapse');
+  const expandButton = document.getElementById('sidebar-expand');
+
+  if (!sidebar || !mainContent) {
+    return;
+  }
+
+  if (authed) {
+    sidebar.style.display = 'flex';
+    body.classList.toggle('sidebar-collapsed', isSidebarCollapsed);
+
+    if (collapseButton) {
+      collapseButton.classList.toggle('hidden', isSidebarCollapsed);
+      collapseButton.setAttribute('aria-expanded', String(!isSidebarCollapsed));
+    }
+
+    if (expandButton) {
+      expandButton.classList.toggle('hidden', !isSidebarCollapsed);
+      expandButton.setAttribute('aria-expanded', String(!isSidebarCollapsed));
+    }
+  } else {
+    sidebar.style.display = 'none';
+    body.classList.remove('sidebar-collapsed');
+
+    if (collapseButton) {
+      collapseButton.classList.add('hidden');
+      collapseButton.setAttribute('aria-expanded', 'false');
+    }
+
+    if (expandButton) {
+      expandButton.classList.add('hidden');
+      expandButton.setAttribute('aria-expanded', 'false');
+    }
+  }
+
+  const marginLeft = authed ? (isSidebarCollapsed ? '64px' : '260px') : '0';
+  mainContent.style.marginLeft = marginLeft;
+}
+
+function collapseSidebar() {
+  if (isSidebarCollapsed) return;
+  isSidebarCollapsed = true;
+  persistSidebarState();
+  updateSidebarUI(!!getToken());
+}
+
+function expandSidebar() {
+  if (!isSidebarCollapsed) return;
+  isSidebarCollapsed = false;
+  persistSidebarState();
+  updateSidebarUI(!!getToken());
+}
 
 // ナビゲーション(ヘッダやサイドバーの)をレンダリングする関数
 function renderNav() {
   const nav = document.getElementById('app-nav');
-  const sidebar = document.getElementById('app-sidebar');
   const authed = !!getToken();
-  
-  // サイドバーの表示/非表示
-  if (sidebar) {
-    sidebar.style.display = authed ? 'flex' : 'none';
+  const collapseButton = document.getElementById('sidebar-collapse');
+  const expandButton = document.getElementById('sidebar-expand');
+
+  if (!nav) {
+    return;
   }
-  
-  // メインコンテンツのマージン調整
-  const mainContent = document.querySelector('.main-content');
-  if (mainContent) {
-    mainContent.style.marginLeft = authed ? '240px' : '0';
+
+  if (collapseButton && !collapseButton.dataset.bound) {
+    collapseButton.addEventListener('click', collapseSidebar);
+    collapseButton.dataset.bound = 'true';
   }
-  
+
+  if (expandButton && !expandButton.dataset.bound) {
+    expandButton.addEventListener('click', expandSidebar);
+    expandButton.dataset.bound = 'true';
+  }
+
+  updateSidebarUI(authed);
+
   nav.innerHTML = authed ? `
     <a href="#/dashboard" data-link>ダッシュボード</a>
     <a href="#/tasks" data-link>タスク</a>

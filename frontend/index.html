@@ -18,10 +18,32 @@
   <div class="app-layout">
     <!-- 左サイドバー -->
     <aside class="sidebar" id="app-sidebar">
-      <div class="sidebar-header">
-        <h1 class="logo">Climbly</h1>
+      <div class="sidebar-collapsed-handle">
+        <button
+          type="button"
+          id="sidebar-expand"
+          class="sidebar-handle-btn"
+          aria-label="サイドバーを開く"
+          aria-expanded="false"
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
       </div>
-      <nav class="sidebar-nav" id="app-nav"></nav>
+      <div class="sidebar-panel">
+        <div class="sidebar-header">
+          <h1 class="logo">Climbly</h1>
+          <button
+            type="button"
+            id="sidebar-collapse"
+            class="sidebar-close-btn"
+            aria-label="サイドバーを閉じる"
+            aria-expanded="true"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <nav class="sidebar-nav" id="app-nav"></nav>
+      </div>
     </aside>
 
     <!-- メインコンテンツエリア -->
