@@ -17,7 +17,7 @@ def _forward_auth_headers(request: Request) -> dict:
     return headers
 
 
-def _aggregate_daily_actuals(records: List[Dict]) -> List[Dict]:
+def _aggregate_daily_actuals(records: List[Dict], expected_dates: Optional[List[str]] = None) -> List[Dict]:
     """
     実績データを日付ごとに集計（累積値）
     records: [{ start_at, progress_value, work_time, ... }]
@@ -49,21 +49,31 @@ def _aggregate_daily_actuals(records: List[Dict]) -> List[Dict]:
         daily_data[date_str]["progress_sum"] += record.get("progress_value", 0)
         daily_data[date_str]["time_sum"] += record.get("work_time", 0)
     
-    # 累積値に変換
-    result = []
+    timeline_set = set(daily_data.keys())
+    if expected_dates:
+        timeline_set.update(str(d) for d in expected_dates if d)
+
+    timeline = sorted(timeline_set)
+
     cumulative_progress = 0
-    cumulative_time = 0
-    
-    for date_str in sorted(daily_data.keys()):
-        cumulative_progress += daily_data[date_str]["progress_sum"]
-        cumulative_time += daily_data[date_str]["time_sum"]
-        
+
+    result = []
+    for date_str in timeline:
+        day_values = daily_data.get(date_str)
+        if day_values:
+            cumulative_progress += day_values["progress_sum"]
+            daily_time = day_values["time_sum"]
+        else:
+            daily_time = 0
+
+        cumulative_progress = min(cumulative_progress, 100)
+
         result.append({
             "target_date": date_str,
-            "work_actual_value": min(cumulative_progress, 100),  # 100%を超えないように
-            "time_actual_value": cumulative_time
+            "work_actual_value": cumulative_progress,
+            "time_actual_value": daily_time,
         })
-    
+
     return result
 
 
@@ -114,17 +124,17 @@ def _compute_today_summary(task: Dict[str, Any], today: date) -> None:
         summary["work_plan_cumulative"] = _to_int(latest_plan_entry[1].get("work_plan_value"))
 
     actuals = task.get("daily_actuals") or []
-    latest_actual_entry = None
+    latest_work_value = 0
+    total_time_actual = 0
 
     for actual in actuals:
         actual_date = _parse_iso_date(actual.get("target_date"))
         if actual_date and actual_date <= today:
-            if latest_actual_entry is None or actual_date > latest_actual_entry[0]:
-                latest_actual_entry = (actual_date, actual)
+            latest_work_value = _to_int(actual.get("work_actual_value"))
+            total_time_actual += _to_int(actual.get("time_actual_value"))
 
-    if latest_actual_entry:
-        summary["work_actual_cumulative"] = _to_int(latest_actual_entry[1].get("work_actual_value"))
-        summary["time_actual_cumulative"] = _to_int(latest_actual_entry[1].get("time_actual_value"))
+    summary["work_actual_cumulative"] = latest_work_value
+    summary["time_actual_cumulative"] = total_time_actual
 
     task["summary_today"] = summary
 
@@ -189,7 +199,14 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
                             if records_resp.is_success:
                                 records = records_resp.json()
                                 # 日付ごとに集計
-                                task["daily_actuals"] = _aggregate_daily_actuals(records)
+                                plan_dates = []
+                                if include_daily_plans:
+                                    plan_dates = [
+                                        p.get("target_date")
+                                        for p in task.get("daily_plans") or []
+                                        if isinstance(p, dict) and p.get("target_date")
+                                    ]
+                                task["daily_actuals"] = _aggregate_daily_actuals(records, plan_dates if plan_dates else None)
                             else:
                                 task["daily_actuals"] = []
                         except Exception as e:
