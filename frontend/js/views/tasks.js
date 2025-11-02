@@ -21,6 +21,14 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+function isTaskDelayed(task, summaryOverride) {
+  if (!task || task.status !== 'active') return false;
+  const summary = summaryOverride || task.summary_today || {};
+  const plan = summary.work_plan_cumulative ?? 0;
+  const actual = summary.work_actual_cumulative ?? 0;
+  return plan > actual;
+}
+
 /**
  * 予定と実績データをマージする
  * @param {Array} plans - daily_plans配列
@@ -79,7 +87,10 @@ export async function TasksView() {
   };
 
   const categoryOptions = Array.from(new Set(items.map(t => t.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ja'));
-  const statusOptions = Object.entries(STATUS_DEFINITIONS);
+  const statusOptions = [
+    ...Object.entries(STATUS_DEFINITIONS).map(([value, def]) => ({ value, label: def.label })),
+    { value: 'delay', label: '遅延' },
+  ];
 
   return `
   <div class="tasks-container">
@@ -104,7 +115,7 @@ export async function TasksView() {
         <label for="filter-status">ステータス</label>
         <select id="filter-status">
           <option value="">すべて</option>
-          ${statusOptions.map(([value, def]) => `<option value="${value}">${escapeHtml(def.label)}</option>`).join('')}
+          ${statusOptions.map(opt => `<option value="${opt.value}">${escapeHtml(opt.label)}</option>`).join('')}
         </select>
       </div>
     </div>
@@ -119,7 +130,7 @@ export async function TasksView() {
         const timeActualToday = summary.time_actual_cumulative ?? 0;
         const workPlanToday = summary.work_plan_cumulative ?? 0;
         const workActualToday = summary.work_actual_cumulative ?? 0;
-        const isDelayed = t.status === 'active' && workPlanToday > workActualToday;
+        const isDelayed = isTaskDelayed(t, summary);
         return `
         <div class="task-card${isDelayed ? ' delayed' : ''}" data-task-id="${t.task_id}">
           <div class="task-card-header">
@@ -414,12 +425,18 @@ export async function setupTasksEvents() {
       const taskId = card.getAttribute('data-task-id');
       const task = taskMap.get(String(taskId));
       let visible = true;
+      const summary = task ? (task.summary_today || {}) : {};
+      const delayed = isTaskDelayed(task, summary);
 
       if (selectedCategory && (!task || (task.category || '') !== selectedCategory)) {
         visible = false;
       }
-      if (visible && selectedStatus && (!task || (task.status || '') !== selectedStatus)) {
-        visible = false;
+      if (visible && selectedStatus) {
+        if (selectedStatus === 'delay') {
+          visible = delayed;
+        } else if (!task || (task.status || '') !== selectedStatus) {
+          visible = false;
+        }
       }
 
       card.classList.toggle('hidden', !visible);
