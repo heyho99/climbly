@@ -119,10 +119,14 @@ export async function TasksView() {
         const timeActualToday = summary.time_actual_cumulative ?? 0;
         const workPlanToday = summary.work_plan_cumulative ?? 0;
         const workActualToday = summary.work_actual_cumulative ?? 0;
+        const isDelayed = t.status === 'active' && workPlanToday > workActualToday;
         return `
-        <div class="task-card" data-task-id="${t.task_id}">
+        <div class="task-card${isDelayed ? ' delayed' : ''}" data-task-id="${t.task_id}">
           <div class="task-card-header">
-            <h3 class="task-name">${t.task_name}</h3>
+            <div class="task-header-main">
+              <h3 class="task-name">${t.task_name}</h3>
+              ${isDelayed ? '<span class="badge badge-danger badge-delay">遅延</span>' : ''}
+            </div>
             <div class="task-actions">
               <button class="btn secondary" data-edit-task="${t.task_id}">編集</button>
               <button class="btn danger" data-del-task="${t.task_id}">削除</button>

@@ -398,6 +398,32 @@ label { display:block; margin: 12px 0 6px; font-size: 14px; color: var(--text); 
   color: var(--text);
 }
 
+.task-card.delayed {
+  border: 1px solid var(--danger);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.task-header-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-card.delayed .task-name {
+  color: var(--danger);
+}
+
+.badge-delay {
+  font-size: 0.75rem;
+}
+
 .tasks-list {
   display: flex;
   flex-direction: column;
