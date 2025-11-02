@@ -113,7 +113,13 @@ export async function TasksView() {
     <div class="helper hidden" id="tasks-filter-empty">該当するタスクがありません</div>
     
     <div class="tasks-list">
-      ${items.map(t => `
+      ${items.map(t => {
+        const summary = t.summary_today || {};
+        const timePlanToday = summary.time_plan_cumulative ?? 0;
+        const timeActualToday = summary.time_actual_cumulative ?? 0;
+        const workPlanToday = summary.work_plan_cumulative ?? 0;
+        const workActualToday = summary.work_actual_cumulative ?? 0;
+        return `
         <div class="task-card" data-task-id="${t.task_id}">
           <div class="task-card-header">
             <h3 class="task-name">${t.task_name}</h3>
@@ -140,6 +146,22 @@ export async function TasksView() {
               <span class="label">目標時間:</span>
               <span>${t.target_time ?? ''}時間</span>
             </div>
+            <div class="task-info-item">
+              <span class="label">予定時間(今日まで):</span>
+              <span>${timePlanToday}時間</span>
+            </div>
+            <div class="task-info-item">
+              <span class="label">実績時間(今日まで):</span>
+              <span>${timeActualToday}時間</span>
+            </div>
+            <div class="task-info-item">
+              <span class="label">予定進捗(今日まで):</span>
+              <span>${workPlanToday}%</span>
+            </div>
+            <div class="task-info-item">
+              <span class="label">実績進捗(今日まで):</span>
+              <span>${workActualToday}%</span>
+            </div>
           </div>
           
           <div class="task-charts">
@@ -165,7 +187,8 @@ export async function TasksView() {
             </div>
           </div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
   </div>`;
 }

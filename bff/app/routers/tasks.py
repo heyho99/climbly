@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 import httpx
 
 router = APIRouter(tags=["tasks"])
@@ -65,6 +65,68 @@ def _aggregate_daily_actuals(records: List[Dict]) -> List[Dict]:
         })
     
     return result
+
+
+def _parse_iso_date(value) -> Optional[date]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return datetime.fromisoformat(value).date()
+    except (TypeError, ValueError):
+        try:
+            return date.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return None
+
+
+def _to_int(value: Any) -> int:
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _compute_today_summary(task: Dict[str, Any], today: date) -> None:
+    summary = {
+        "work_plan_cumulative": 0,
+        "work_actual_cumulative": 0,
+        "time_plan_cumulative": 0,
+        "time_actual_cumulative": 0,
+    }
+
+    plans = task.get("daily_plans") or []
+    latest_plan_entry = None
+    time_plan_total = 0
+
+    for plan in plans:
+        plan_date = _parse_iso_date(plan.get("target_date"))
+        if plan_date and plan_date <= today:
+            time_plan_total += _to_int(plan.get("time_plan_value"))
+            if latest_plan_entry is None or plan_date > latest_plan_entry[0]:
+                latest_plan_entry = (plan_date, plan)
+
+    summary["time_plan_cumulative"] = time_plan_total
+    if latest_plan_entry:
+        summary["work_plan_cumulative"] = _to_int(latest_plan_entry[1].get("work_plan_value"))
+
+    actuals = task.get("daily_actuals") or []
+    latest_actual_entry = None
+
+    for actual in actuals:
+        actual_date = _parse_iso_date(actual.get("target_date"))
+        if actual_date and actual_date <= today:
+            if latest_actual_entry is None or actual_date > latest_actual_entry[0]:
+                latest_actual_entry = (actual_date, actual)
+
+    if latest_actual_entry:
+        summary["work_actual_cumulative"] = _to_int(latest_actual_entry[1].get("work_actual_value"))
+        summary["time_actual_cumulative"] = _to_int(latest_actual_entry[1].get("time_actual_value"))
+
+    task["summary_today"] = summary
 
 
 @router.get("/tasks")
@@ -136,6 +198,12 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
                     else:
                         task["daily_actuals"] = []
             
+            today = datetime.utcnow().date()
+
+            for task in items:
+                if isinstance(task, dict):
+                    _compute_today_summary(task, today)
+
             return {
                 "items": items,
                 "page": page,
