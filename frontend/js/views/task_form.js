@@ -4,6 +4,21 @@ import { api } from '../api.js';
 import { navigateTo } from '../router.js';
 import { initDailyPlanChart } from './components/daily_plan_chart.js';
 
+const WEEKDAY_ORDER = [
+  { key: 'sun', label: '日', index: 0 },
+  { key: 'mon', label: '月', index: 1 },
+  { key: 'tue', label: '火', index: 2 },
+  { key: 'wed', label: '水', index: 3 },
+  { key: 'thu', label: '木', index: 4 },
+  { key: 'fri', label: '金', index: 5 },
+  { key: 'sat', label: '土', index: 6 },
+];
+
+const WEEKDAY_BY_INDEX = WEEKDAY_ORDER.reduce((acc, day) => {
+  acc[day.index] = day;
+  return acc;
+}, {});
+
 
 export async function TaskFormView({ mode, id }) {
   let task = null;
@@ -57,10 +72,60 @@ export async function TaskFormView({ mode, id }) {
       <input type="number" name="target_time" value="${initial.target_time||0}" min="0" />
       <label>コメント</label>
       <textarea name="comment" rows="2">${escapeHtml(initial.comment||'')}</textarea>
+      <div class="auto-plan-settings" style="margin:12px 0; padding:12px; border:1px solid #e5e7eb; border-radius:6px;">
+        <div style="font-weight:bold; margin-bottom:8px;">自動計算方式</div>
+        <div class="row" style="gap:16px; flex-wrap:wrap; margin-bottom:12px; align-items:center;">
+          <label style="display:flex; align-items:center; gap:4px;">
+            <input type="radio" name="auto-plan-type" value="equal" checked />
+            均等配分
+          </label>
+          <label style="display:flex; align-items:center; gap:4px;">
+            <input type="radio" name="auto-plan-type" value="weekday-weekend" />
+            平日/土日
+          </label>
+          <label style="display:flex; align-items:center; gap:4px;">
+            <input type="radio" name="auto-plan-type" value="weekly" />
+            曜日ごと
+          </label>
+        </div>
+        <div data-auto-config="weekday-weekend" style="display:none;">
+          <div style="font-weight:bold; margin-bottom:4px;">平日/土日設定（割合）</div>
+          <div class="row" style="gap:12px; flex-wrap:wrap;">
+            <div class="col" style="min-width:160px;">
+              <label>平日 割合(%)</label>
+              <input type="number" step="0.1" min="0" name="auto-weekday-ratio" value="0" />
+            </div>
+            <div class="col" style="min-width:160px;">
+              <label>土日 割合(%)</label>
+              <input type="number" step="0.1" min="0" name="auto-weekend-ratio" value="0" />
+            </div>
+          </div>
+          <p style="font-size:12px; color:#666; margin-top:8px;">入力割合は自動で正規化され、余剰は期間の前半から順番に配分されます。</p>
+        </div>
+        <div data-auto-config="weekly" style="display:none; margin-top:12px;">
+          <div style="font-weight:bold; margin-bottom:8px;">曜日ごとの設定（割合）</div>
+          <div class="table-wrapper">
+            <table class="table" style="min-width:320px;">
+              <thead>
+                <tr><th style="width:80px;">曜日</th><th>割合(%)</th></tr>
+              </thead>
+              <tbody>
+                ${WEEKDAY_ORDER.map(day => `
+                  <tr>
+                    <td>${day.label}</td>
+                    <td><input type="number" step="0.1" min="0" name="auto-weekly-ratio-${day.key}" value="0" /></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:12px; color:#666; margin-top:8px;">曜日ごとの割合は正規化され、余剰は早い日付から順に配分されます。</p>
+        </div>
+        <p style="font-size:12px;color:#666; margin-top:12px;">自動計算ボタンで選択した方式を適用します。（入力割合は自動調整され、最終的に作業100%と目標時間に一致します。）</p>
+      </div>
       <div class="row" style="margin:8px 0; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button class="btn secondary" type="button" id="equalize-work">作業計画を均等配分</button>
-        <button class="btn secondary" type="button" id="equalize-time">時間計画を均等配分</button>
-        <span style="font-size:12px;color:#666;">開始日〜終了日の期間を基準に計算します。必要に応じて後で個別調整してください。</span>
+        <button class="btn secondary" type="button" id="equalize-work">作業計画を自動計算</button>
+        <button class="btn secondary" type="button" id="equalize-time">時間計画を自動計算</button>
       </div>
       <div id="preview" style="display:none; margin:8px 0;">
         <div style="font-weight:bold; margin-bottom:4px;">日次計画プレビュー</div>
@@ -152,9 +217,28 @@ export function setupTaskFormEvents() {
 
   const form = document.getElementById('task-form');
 
+  if (form) {
+    const syncAutoConfigVisibility = () => {
+      const type = getAutoPlanType(form);
+      const configs = form.querySelectorAll('[data-auto-config]');
+      configs.forEach((el) => {
+        if (!el) return;
+        el.style.display = el.dataset.autoConfig === type ? '' : 'none';
+      });
+    };
+    const autoRadios = form.querySelectorAll('input[name="auto-plan-type"]');
+    autoRadios.forEach((radio) => {
+      radio.addEventListener('change', syncAutoConfigVisibility);
+    });
+    syncAutoConfigVisibility();
+  }
+
   function handleEqualization({ type }) {
     if (!form) return;
     const { payload, start_date, end_date } = collectForm(form);
+    const fd = new FormData(form);
+    const autoType = fd.get('auto-plan-type') || 'equal';
+    const targetTime = Number(payload.target_time || 0);
     const errBox = document.getElementById('task-error');
     errBox.style.display = 'none';
 
@@ -165,11 +249,18 @@ export function setupTaskFormEvents() {
       return;
     }
 
+    const ratioWeights = buildAutoPlanWeights(autoType, skeleton, fd);
+    if (typeof ratioWeights === 'string') {
+      errBox.textContent = ratioWeights;
+      errBox.style.display = 'block';
+      return;
+    }
+
     let updated;
     if (type === 'work') {
-      updated = equalizeWorkPlans(skeleton);
+      updated = applyWorkWithWeights(skeleton, ratioWeights);
     } else {
-      updated = equalizeTimePlans(skeleton, Number(payload.target_time || 0));
+      updated = applyTimeWithWeights(skeleton, ratioWeights, targetTime);
     }
 
     if (typeof updated === 'string') {
@@ -310,14 +401,14 @@ function renderPreview(items, target_time) {
   const sumBox = document.getElementById('preview-sum');
   if (!p || !tbody || !sumBox) return;
   tbody.innerHTML = items.map(it => `<tr><td>${it.target_date}</td><td style="text-align:right;">${it.work_plan_value}%</td><td style="text-align:right;">${it.time_plan_value}h</td></tr>`).join('');
-  
+
   // 時間の合計計算
   const sumT = items.reduce((a,b)=>a+Number(b.time_plan_value||0),0);
-  
+
   // 作業計画値は累積値なので、最終日の値が最終進捗
   const sortedItems = [...items].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
   const finalWorkValue = sortedItems[sortedItems.length - 1]?.work_plan_value || 0;
-  
+
   sumBox.textContent = `合計: 作業 ${finalWorkValue}% / 時間 ${sumT}h（目標 ${target_time}h）`;
   p.style.display = 'block';
 }
@@ -329,11 +420,11 @@ function validateBeforeSubmit(payload, items) {
   const ed = new Date(payload.end_at);
   if (ed < sd) return '終了日は開始日以降である必要があります。';
   if (payload.target_time < 0) return '目標時間は0以上を指定してください。';
-  if (!items || items.length === 0) return '均等配分を押して日次計画を作成してください。';
-  
+  if (!items || items.length === 0) return '自動計算を実行して日次計画を作成してください。';
+
   // 合計チェック
   const sumT = items.reduce((a,b)=>a+Number(b.time_plan_value||0),0);
-  
+
   // 作業計画値は累積値なので、最終日の値が100%であることを確認
   const sortedItems = [...items].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
   const finalWorkValue = sortedItems[sortedItems.length - 1]?.work_plan_value || 0;
@@ -341,4 +432,99 @@ function validateBeforeSubmit(payload, items) {
   if (finalWorkValue !== 100) return '作業計画の最終累積値が100%になっていません。';
   if (sumT !== Number(payload.target_time||0)) return '時間の合計が目標時間と一致していません。';
   return '';
+}
+
+function getAutoPlanType(form) {
+  const checked = form.querySelector('input[name="auto-plan-type"]:checked');
+  return checked ? checked.value : 'equal';
+}
+
+function buildAutoPlanWeights(autoType, items, fd) {
+  if (autoType === 'weekday-weekend') {
+    const weekdayRatio = Number(fd.get('auto-weekday-ratio') || 0);
+    const weekendRatio = Number(fd.get('auto-weekend-ratio') || 0);
+    if (weekdayRatio <= 0 && weekendRatio <= 0) {
+      return '平日と土日の割合を入力してください。';
+    }
+    return items.map(item => {
+      const idx = getWeekdayIndex(item.target_date);
+      return (idx === 0 || idx === 6) ? weekendRatio : weekdayRatio;
+    });
+  }
+
+  if (autoType === 'weekly') {
+    const ratios = WEEKDAY_ORDER.reduce((acc, day) => {
+      acc[day.index] = Number(fd.get(`auto-weekly-ratio-${day.key}`) || 0);
+      return acc;
+    }, {});
+    const hasPositive = Object.values(ratios).some(v => v > 0);
+    if (!hasPositive) {
+      return '曜日ごとの割合を少なくとも1つ入力してください。';
+    }
+    return items.map(item => ratios[getWeekdayIndex(item.target_date)] || 0);
+  }
+
+  // 均等配分
+  return new Array(items.length).fill(1);
+}
+
+function applyWorkWithWeights(items, weights) {
+  const increments = allocateByWeights(weights, 100, { allowZeroTotal: false, label: '作業計画' });
+  if (typeof increments === 'string') return increments;
+  let cumulative = 0;
+  return items.map((item, i) => {
+    cumulative += increments[i];
+    return { ...item, work_plan_value: cumulative };
+  });
+}
+
+function applyTimeWithWeights(items, weights, target_time) {
+  const total = Math.round(Number(target_time || 0));
+  if (total < 0) return '目標時間は0以上を指定してください。';
+  if (total === 0) {
+    return items.map(item => ({ ...item, time_plan_value: 0 }));
+  }
+  const increments = allocateByWeights(weights, total, { allowZeroTotal: false, label: '時間計画' });
+  if (typeof increments === 'string') return increments;
+  return items.map((item, i) => ({ ...item, time_plan_value: increments[i] }));
+}
+
+function allocateByWeights(rawWeights, total, { allowZeroTotal, label }) {
+  const weights = rawWeights.map(w => {
+    const num = Number(w);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+  });
+  const sum = weights.reduce((acc, val) => acc + val, 0);
+
+  if (total === 0) {
+    return new Array(weights.length).fill(0);
+  }
+
+  if (sum === 0) {
+    return allowZeroTotal ? new Array(weights.length).fill(0) : `${label}の配分比率が0です。値を入力してください。`;
+  }
+
+  const base = [];
+  let allocated = 0;
+
+  for (let i = 0; i < weights.length; i++) {
+    const share = (weights[i] / sum) * total;
+    const value = Math.floor(share);
+    base[i] = value;
+    allocated += value;
+  }
+
+  let remaining = Math.round(total - allocated);
+  for (let i = 0; i < base.length && remaining > 0; i++) {
+    base[i] += 1;
+    remaining -= 1;
+  }
+
+  return base;
+}
+
+function getWeekdayIndex(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return 0;
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
