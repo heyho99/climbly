@@ -186,14 +186,7 @@ export async function TaskFormView({ mode, id }) {
       </div>
       <div id="preview" style="display:none; margin:8px 0;">
         <div style="font-weight:bold; margin-bottom:4px;">日次計画プレビュー</div>
-        <div id="preview-sum" style="margin-bottom:4px; font-size:13px;"></div>
-        <div id="daily-plan-chart" style="width:100%;height:360px;margin-bottom:8px;"></div>
-        <div class="table-wrapper">
-          <table class="table" id="preview-table">
-            <thead><tr><th>日付</th><th>作業(%)</th><th>時間</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div id="daily-plan-chart" style="width:100%;height:360px;"></div>
       </div>
       ${authSection}
       <div style="margin-top:12px; display:flex; gap:8px;">
@@ -588,21 +581,9 @@ function equalizeTimePlans(items, target_time) {
 }
 
 function renderPreview(items, target_time) {
-  const p = document.getElementById('preview');
-  const tbody = document.querySelector('#preview-table tbody');
-  const sumBox = document.getElementById('preview-sum');
-  if (!p || !tbody || !sumBox) return;
-  tbody.innerHTML = items.map(it => `<tr><td>${it.target_date}</td><td style="text-align:right;">${it.work_plan_value}%</td><td style="text-align:right;">${it.time_plan_value}h</td></tr>`).join('');
-
-  // 時間の合計計算
-  const sumT = items.reduce((a,b)=>a+Number(b.time_plan_value||0),0);
-
-  // 作業計画値は累積値なので、最終日の値が最終進捗
-  const sortedItems = [...items].sort((a, b) => new Date(a.target_date) - new Date(b.target_date));
-  const finalWorkValue = sortedItems[sortedItems.length - 1]?.work_plan_value || 0;
-
-  sumBox.textContent = `合計: 作業 ${finalWorkValue}% / 時間 ${sumT}h（目標 ${target_time}h）`;
-  p.style.display = 'block';
+  const preview = document.getElementById('preview');
+  if (!preview) return;
+  preview.style.display = items && items.length ? 'block' : 'none';
 }
 
 function validateBeforeSubmit(payload, items) {
