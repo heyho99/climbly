@@ -29,7 +29,12 @@ export function initDailyPlanChart({ el, items, onChange, series = ['work_plan',
     let lastRender = 0;
 
     function toSeriesData(key) {
-      return data.map(d => Number(d[key] || 0));
+      return data.map(d => {
+        const value = d[key];
+        if (value == null) return null;
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+      });
     }
     function toXAxis() {
       return data.map(d => d.target_date);
@@ -123,7 +128,8 @@ export function initDailyPlanChart({ el, items, onChange, series = ['work_plan',
           symbolSize: 8,
           data: toSeriesData(config.dataKey),
           itemStyle: { color: config.color },
-          lineStyle: config.lineStyle
+          lineStyle: config.lineStyle,
+          connectNulls: false
         };
       }).filter(s => s !== null);
 

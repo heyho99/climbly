@@ -17,7 +17,11 @@ def _forward_auth_headers(request: Request) -> dict:
     return headers
 
 
-def _aggregate_daily_actuals(records: List[Dict], expected_dates: Optional[List[str]] = None) -> List[Dict]:
+def _aggregate_daily_actuals(
+    records: List[Dict],
+    expected_dates: Optional[List[str]] = None,
+    upto_date: Optional[date] = None,
+) -> List[Dict]:
     """
     実績データを日付ごとに集計（累積値）
     records: [{ start_at, progress_value, work_time, ... }]
@@ -49,9 +53,18 @@ def _aggregate_daily_actuals(records: List[Dict], expected_dates: Optional[List[
         daily_data[date_str]["progress_sum"] += record.get("progress_value", 0)
         daily_data[date_str]["time_sum"] += record.get("work_time", 0)
     
-    timeline_set = set(daily_data.keys())
+    timeline_set = set()
+
+    for key in daily_data.keys():
+        key_date = _parse_iso_date(key)
+        if key_date and (upto_date is None or key_date <= upto_date):
+            timeline_set.add(key_date.isoformat())
+
     if expected_dates:
-        timeline_set.update(str(d) for d in expected_dates if d)
+        for expected in expected_dates:
+            expected_date = _parse_iso_date(expected)
+            if expected_date and (upto_date is None or expected_date <= upto_date):
+                timeline_set.add(expected_date.isoformat())
 
     timeline = sorted(timeline_set)
 
@@ -160,6 +173,8 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
             if not isinstance(items, list):
                 items = []
             
+            today = datetime.utcnow().date()
+
             # include_daily_plansがTrueの場合、各タスクのdaily_plansを取得
             if include_daily_plans:
                 headers = _forward_auth_headers(request)
@@ -206,7 +221,11 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
                                         for p in task.get("daily_plans") or []
                                         if isinstance(p, dict) and p.get("target_date")
                                     ]
-                                task["daily_actuals"] = _aggregate_daily_actuals(records, plan_dates if plan_dates else None)
+                                task["daily_actuals"] = _aggregate_daily_actuals(
+                                    records,
+                                    plan_dates if plan_dates else None,
+                                    upto_date=today,
+                                )
                             else:
                                 task["daily_actuals"] = []
                         except Exception as e:
@@ -215,8 +234,6 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
                     else:
                         task["daily_actuals"] = []
             
-            today = datetime.utcnow().date()
-
             for task in items:
                 if isinstance(task, dict):
                     _compute_today_summary(task, today)

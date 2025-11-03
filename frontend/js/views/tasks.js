@@ -307,12 +307,26 @@ export async function setupTasksEvents() {
       return;
     }
 
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    const chartData = mergedData.map(item => {
+      if (item.target_date > todayStr) {
+        return {
+          ...item,
+          work_actual_value: null,
+          time_actual_value: null
+        };
+      }
+      return item;
+    });
+
     const workChartEl = document.getElementById(`chart-work-${task.task_id}`);
     if (workChartEl) {
       try {
         initDailyPlanChart({
           el: workChartEl,
-          items: mergedData,
+          items: chartData,
           series: ['work_plan', 'work_actual'],
           readOnly: true
         });
@@ -326,7 +340,7 @@ export async function setupTasksEvents() {
       try {
         initDailyPlanChart({
           el: timeChartEl,
-          items: mergedData,
+          items: chartData,
           series: ['time_plan', 'time_actual'],
           readOnly: true
         });
