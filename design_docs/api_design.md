@@ -32,76 +32,81 @@
 Auth:
 - POST `/v1/auth/register`
   - 入力: `username`, `email`, `password`
-  - 出力: `{ user, token }`
+  - 出力: `{ token, user }`
 - POST `/v1/auth/login`
   - 入力: `username_or_email`, `password`
-  - 出力: `{ user, token }`
+  - 出力: `{ token, user }`
 - POST `/v1/auth/logout`
-  - 入力: なし（サーバ側トークン失効/クライアント破棄）
+  - 入力: なし（JWTはクライアント破棄）
 
 Users:
 - GET `/v1/users/me`
-  - 出力: 自ユーザー情報（`users`）
-- PATCH `/v1/users/me`
-  - 入力: `email?`, `password?`
-  - 出力: 更新後ユーザー
+  - 出力: ログインユーザー情報（`user_id`, `username`, `email`, `is_active`, `last_login_at`, `created_at`, `updated_at`）
 
-TaskAuths（v2で拡充想定）:
-- GET `/v1/task_auths?task_id=...`
-- POST `/v1/task_auths`（v2）
-  - 入力: `task_id`, `user_id`, `task_user_auth`（`read|write|admin`）
-- PATCH `/v1/task_auths/{task_auth_id}`（v2）
-- DELETE `/v1/task_auths/{task_auth_id}`（v2）
+TaskAuths（v1は参照・作成のみ）:
+- GET `/v1/task_auths?task_id=`
+  - `task_id` 指定時はそのタスクの自身の権限のみ、未指定時は自分が紐づく全タスクの権限一覧
+- POST `/v1/task_auths`
+  - 入力: `task_id`, `user_id`, `task_user_auth(read|write|admin)`
+  - 既に同じ組み合わせが存在する場合は409
 
 ---
 
 ## task-service（タスク・日次計画）
 
 Tasks（`tasks`）:
-- GET `/v1/tasks?mine=true&status=active&category=...&page=...`
-  - v1要件: 自分が作成者のタスクのみ
+- GET `/v1/tasks?mine=true&status=active&category=...`
+  - `mine=true` の場合は user-service の `/task_auths` を参照し、アクセス権のあるタスクIDのみ返却
+  - `status` は `active|completed|paused|cancelled` のみ指定可能
 - POST `/v1/tasks`
-  - 入力: `task_name`, `task_content`, `start_at`, `end_at`, `category(study|creation|other)`, `target_time`, `comment?`
-  - 出力: 作成された `task`
+  - 入力: `task_name`, `task_content`, `start_at`, `end_at`, `category`, `target_time`, `comment?`, `status`
+  - 作成後に user-service の `/task_auths` へ `admin` 権限を登録（失敗時はタスクをロールバック削除）
 - GET `/v1/tasks/{task_id}`
 - PATCH `/v1/tasks/{task_id}`
+  - 更新可能なフィールド: `task_name`, `task_content`, `start_at`, `end_at`, `category`, `target_time`, `comment`, `status`
 - DELETE `/v1/tasks/{task_id}`
-  - 参照制約により関連の扱いは整合（[pages.md](cci:7://file://wsl.localhost/Ubuntu/home/ouchi/climbly/design_docs/pages.md:0:0-0:0)の方針参照）
+  - 外部キーで `daily_plans` は ON DELETE CASCADE
 
 Daily Plans（`daily_plans`）:
 - GET `/v1/tasks/{task_id}/daily_plans?from=YYYY-MM-DD&to=YYYY-MM-DD`
+  - `from` / `to` は任意。指定がない場合は全日付を昇順で返却
 - PUT `/v1/tasks/{task_id}/daily_plans/bulk`
   - 入力: `[{ target_date, work_plan_value, time_plan_value }, ...]`
   - バリデーション:
-    - `Σ(work_plan_value) = 100`
+    - `work_plan_value` は累積値として扱うため最大値が 100 であること
     - `Σ(time_plan_value) = tasks.target_time`
-- PATCH `/v1/daily_plans/{daily_time_plan_id}`
-- DELETE `/v1/daily_plans/{daily_time_plan_id}`
+  - 入力に含まれない日付の `daily_plans` は削除
+- GET `/v1/daily_plans/latest_progress?task_id=`
+  - 今日時点の最新計画進捗（`work_plan_value`）を返却
+- GET `/v1/daily_plans/aggregate?from=&to=`
+  - アクセス可能なタスク群の `time_plan_value` を日付集計
 
 ---
 
 ## record-service（実績記録・集計）
 
 Record Works（`record_works`）:
-- GET `/v1/records?task_id=&from=&to=&page=...`
+- GET `/v1/records?task_id=&from=&to=&page=&per_page=`
+  - `from`/`to` は `start_at`・`end_at` でフィルタ、`page`/`per_page(<=100)` でページング
+  - `created_by` が自分のレコードのみ取得
+- GET `/v1/records/latest_progress?task_id=`
+  - 指定タスクの最新実績進捗 (`progress_value`) を返却
+- GET `/v1/records/daily_aggregate?from=&to=`
+  - `start_at` を日単位に集計し、`total_work_time`（分）を返却
+- GET `/v1/records/by_task?task_id=&from=&to=`
+  - タスクIDごとに実績をグループ化して返却（カンバン表示向け）
+- GET `/v1/records/{record_work_id}`
 - POST `/v1/records`
   - 入力: `task_id`, `start_at`, `end_at`, `progress_value(0-100)`, `work_time`, `note?`
-- GET `/v1/records/{record_work_id}`
+  - `created_by` は認証ユーザーで固定
 - PATCH `/v1/records/{record_work_id}`
+  - 更新フィールド: `start_at`, `end_at`, `progress_value`, `work_time`, `note`
+  - 更新時に `last_updated_user`・`updated_at` を自動更新
 - DELETE `/v1/records/{record_work_id}`
-- GET `/v1/records/by_task?task_id=&from=&to=`
-  - 出力: タスク別にグループ化された実績データ（カンバン表示用）
 
-Metrics（ダッシュボード/グラフ用）:
-- GET `/v1/metrics/works/daily?from=&to=&task_id=`
-  - 出力: `[{ date, total_work_time, total_progress_delta }, ...]`
-- GET `/v1/metrics/tasks/summary`
-  - 出力（例）:
-    - 現在進行中のタスク数
-    - 累計タスク完了数
-    - 今月のタスク完了数
-    - 今月/累計の作業時間
-    - 今月/累計の作業時間
+Metrics（ダッシュボード/集計用）:
+- GET `/v1/metrics/work_time/summary?from=&to=`
+  - 指定期間の作業時間合計（分）を返却
 
 ---
 
