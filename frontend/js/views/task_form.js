@@ -19,24 +19,81 @@ const WEEKDAY_BY_INDEX = WEEKDAY_ORDER.reduce((acc, day) => {
   return acc;
 }, {});
 
+const ROLE_LABELS = {
+  read: '閲覧',
+  write: '更新',
+  admin: '管理',
+};
+
 
 export async function TaskFormView({ mode, id }) {
   let task = null;
   let dailyPlans = [];
+  let taskAuths = [];
+  let currentUser = null;
+  let isAdmin = false;
   if (mode === 'edit') {
     try {
       const res = await api.getTask(id);
       task = res?.task || null;
       dailyPlans = Array.isArray(res?.daily_plans) ? res.daily_plans : [];
     } catch {}
+    try {
+      const me = await api.me();
+      currentUser = me || null;
+    } catch {}
+    try {
+      const authRes = await api.listTaskAuths(id);
+      taskAuths = Array.isArray(authRes) ? authRes : [];
+    } catch {}
+    if (currentUser) {
+      const uid = Number(currentUser.user_id);
+      isAdmin = taskAuths.some(auth => Number(auth.user_id) === uid && auth.task_user_auth === 'admin');
+    }
   }
 
   const initial = task || { task_name:'', task_content:'', category:'study', start_at:'', end_at:'', target_time:0, comment:'', status:'active' };
+  const authHelperText = isAdmin
+    ? '管理者として他のユーザへ権限を付与・更新できます。'
+    : '権限は閲覧のみ可能です（管理者のみ追加・更新ができます）。';
+  const authSection = mode === 'edit' ? `
+        <div id="task-auth-section" style="margin-top:16px; padding:12px; border:1px solid #e5e7eb; border-radius:6px;">
+          <div style="font-weight:bold; margin-bottom:8px;">権限管理</div>
+          <p class="helper" style="margin-bottom:8px;">${escapeHtml(authHelperText)}</p>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr><th>ユーザID</th><th>権限</th>${isAdmin ? '<th>操作</th>' : ''}</tr>
+              </thead>
+              <tbody id="task-auth-table"></tbody>
+            </table>
+          </div>
+          <div id="task-auth-error" class="alert" style="display:none; margin-top:8px;"></div>
+          <div id="task-auth-add-container" class="row" style="margin-top:12px; gap:8px; ${isAdmin ? '' : 'display:none;'}">
+            <div class="col" style="min-width:160px;">
+              <label>ユーザID</label>
+              <input type="number" min="1" id="auth-add-user-id" />
+            </div>
+            <div class="col" style="min-width:160px;">
+              <label>付与する権限</label>
+              <select id="auth-add-role">
+                <option value="read">閲覧</option>
+                <option value="write">更新</option>
+                <option value="admin">管理</option>
+              </select>
+            </div>
+            <div class="col" style="align-self:flex-end;">
+              <button type="button" class="btn secondary" id="auth-add-submit">追加</button>
+            </div>
+          </div>
+        </div>
+      ` : '';
+  const initialAuthScript = mode === 'edit' ? `<script id="initial-auths" type="application/json">${JSON.stringify(taskAuths || [])}</script>` : '';
 
   return `
   <div class="card">
     <h2>タスク${mode === 'edit' ? '編集' : '作成'}</h2>
-    <form id="task-form" data-mode="${mode}" data-id="${id||''}">
+    <form id="task-form" data-mode="${mode}" data-id="${id||''}" data-is-admin="${isAdmin ? '1' : '0'}" data-current-user-id="${currentUser?.user_id ?? ''}">
       <label>名称</label>
       <input name="task_name" value="${escapeHtml(initial.task_name)}" required />
       <label>説明</label>
@@ -138,12 +195,14 @@ export async function TaskFormView({ mode, id }) {
           </table>
         </div>
       </div>
+      ${authSection}
       <div style="margin-top:12px; display:flex; gap:8px;">
         <button class="btn" type="submit">${mode==='edit'?'更新':'作成'}</button>
         <button class="btn secondary" type="button" id="cancel">キャンセル</button>
       </div>
       <div id="task-error" class="alert" style="display:none; margin-top:8px;"></div>
       ${mode==='edit' ? `<script id="initial-plans" type="application/json">${JSON.stringify(dailyPlans||[])}</script>` : ''}
+      ${initialAuthScript}
     </form>
   </div>`;
 }
@@ -330,6 +389,139 @@ export function setupTaskFormEvents() {
         }
       }
       form._initializedPreview = true;
+    }
+  }
+
+  // 権限管理
+  if (form && form.dataset.mode === 'edit') {
+    const authTable = document.getElementById('task-auth-table');
+    const authErrorBox = document.getElementById('task-auth-error');
+    const addUserInput = document.getElementById('auth-add-user-id');
+    const addRoleSelect = document.getElementById('auth-add-role');
+    const addSubmitBtn = document.getElementById('auth-add-submit');
+    const isAdmin = form.dataset.isAdmin === '1';
+    const taskId = form.dataset.id;
+    let authState = [];
+
+    function showAuthError(message) {
+      if (!authErrorBox) return;
+      if (message) {
+        authErrorBox.textContent = message;
+        authErrorBox.style.display = 'block';
+      } else {
+        authErrorBox.textContent = '';
+        authErrorBox.style.display = 'none';
+      }
+    }
+
+    function renderAuthRows() {
+      if (!authTable) return;
+      const rows = authState.map(auth => {
+        const role = auth.task_user_auth;
+        const roleLabel = ROLE_LABELS[role] || role;
+        if (!isAdmin) {
+          return `<tr>
+            <td>${escapeHtml(String(auth.user_id))}</td>
+            <td>${escapeHtml(roleLabel)}</td>
+          </tr>`;
+        }
+        const options = ['read', 'write', 'admin'].map(opt => `
+            <option value="${opt}" ${opt === role ? 'selected' : ''}>${ROLE_LABELS[opt] || opt}</option>
+          `).join('');
+        return `<tr>
+          <td>${escapeHtml(String(auth.user_id))}</td>
+          <td>
+            <select data-auth-id="${auth.task_auth_id}" class="auth-role-select">
+              ${options}
+            </select>
+          </td>
+          <td>
+            <button type="button" class="btn danger" data-auth-delete="${auth.task_auth_id}">削除</button>
+          </td>
+        </tr>`;
+      }).join('');
+      if (rows) {
+        authTable.innerHTML = rows;
+      } else {
+        const colspan = isAdmin ? 3 : 2;
+        authTable.innerHTML = `<tr><td colspan="${colspan}" class="helper">権限が設定されていません。</td></tr>`;
+      }
+    }
+
+    const initialAuthScript = document.getElementById('initial-auths');
+    if (initialAuthScript) {
+      try {
+        const parsed = JSON.parse(initialAuthScript.textContent || '[]');
+        if (Array.isArray(parsed)) authState = parsed;
+      } catch {}
+    }
+    renderAuthRows();
+
+    if (isAdmin && authTable) {
+      authTable.addEventListener('change', async (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLSelectElement)) return;
+        const authId = target.dataset.authId;
+        if (!authId) return;
+        const newRole = target.value;
+        showAuthError('');
+        target.disabled = true;
+        try {
+          const updated = await api.updateTaskAuth(taskId, authId, { task_user_auth: newRole });
+          authState = authState.map(item => item.task_auth_id === updated.task_auth_id ? updated : item);
+          renderAuthRows();
+        } catch (err) {
+          showAuthError(err?.message || '権限の更新に失敗しました。');
+          target.value = [...authState.filter(item => String(item.task_auth_id) === String(authId))][0]?.task_user_auth || 'read';
+        } finally {
+          target.disabled = false;
+        }
+      });
+
+      authTable.addEventListener('click', async (e) => {
+        const btn = e.target;
+        if (!(btn instanceof HTMLButtonElement)) return;
+        const authId = btn.dataset.authDelete;
+        if (!authId) return;
+        if (!confirm('権限を削除しますか？')) return;
+        btn.disabled = true;
+        showAuthError('');
+        try {
+          await api.deleteTaskAuth(taskId, authId);
+          authState = authState.filter(item => String(item.task_auth_id) !== String(authId));
+          renderAuthRows();
+        } catch (err) {
+          showAuthError(err?.message || '権限の削除に失敗しました。');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    if (isAdmin && addSubmitBtn) {
+      addSubmitBtn.onclick = async (e) => {
+        e.preventDefault();
+        if (!addUserInput || !addRoleSelect) return;
+        const userId = Number(addUserInput.value);
+        const role = addRoleSelect.value;
+        if (!userId || userId <= 0) {
+          showAuthError('ユーザIDを正しく入力してください。');
+          return;
+        }
+        showAuthError('');
+        addSubmitBtn.disabled = true;
+        try {
+          const created = await api.createTaskAuth(taskId, { user_id: userId, task_user_auth: role });
+          authState = [...authState, created];
+          addUserInput.value = '';
+          addRoleSelect.value = 'read';
+          renderAuthRows();
+        } catch (err) {
+          showAuthError(err?.message || '権限の追加に失敗しました。');
+        } finally {
+          addSubmitBtn.disabled = false;
+        }
+      };
     }
   }
 }

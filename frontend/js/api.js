@@ -12,7 +12,10 @@ async function request(path, { method='GET', body, headers={} } = {}) {
   const res = await fetch(API_BASE + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) {
     let msg = 'Request failed';
-    try { const err = await res.json(); msg = err.message || JSON.stringify(err); } catch {}
+    try {
+      const err = await res.json();
+      msg = err.message || err.detail?.message || JSON.stringify(err);
+    } catch {}
     throw new Error(`${res.status}: ${msg}`);
   }
   if (res.status === 204) return null;
@@ -58,6 +61,10 @@ export const api = {
   // async createTask(payload) { return request('/tasks', { method:'POST', body: payload }); },
   async updateTask(task_id, payload) { return request(`/tasks/${task_id}`, { method:'PATCH', body: payload }); },
   async deleteTask(task_id) { return request(`/tasks/${task_id}`, { method:'DELETE' }); },
+  async listTaskAuths(task_id) { return request(`/tasks/${task_id}/auths`); },
+  async createTaskAuth(task_id, payload) { return request(`/tasks/${task_id}/auths`, { method:'POST', body: payload }); },
+  async updateTaskAuth(task_id, task_auth_id, payload) { return request(`/tasks/${task_id}/auths/${task_auth_id}`, { method:'PATCH', body: payload }); },
+  async deleteTaskAuth(task_id, task_auth_id) { return request(`/tasks/${task_id}/auths/${task_auth_id}`, { method:'DELETE' }); },
   async createTaskWithPlans(taskPayload, items) {
     return request('/tasks_with_plans', { method:'POST', body: { task: taskPayload, daily_plans: { items } } });
   },

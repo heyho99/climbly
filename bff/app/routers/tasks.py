@@ -6,6 +6,7 @@ import httpx
 router = APIRouter(tags=["tasks"])
 
 TASK_SVC_BASE = "http://task-service/v1"
+USER_SVC_BASE = "http://user-service/v1"
 RECORD_SVC_BASE = "http://record-service/v1"
 
 
@@ -247,6 +248,68 @@ def list_tasks(request: Request, mine: Optional[bool] = True, category: Optional
     except httpx.RequestError as e:
         raise HTTPException(status_code=502, detail={"message": "task-service unavailable", "error": str(e)})
 
+
+@router.get("/tasks/{task_id}/auths")
+def list_task_auths(task_id: int, request: Request):
+    headers = _forward_auth_headers(request)
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(
+                f"{USER_SVC_BASE}/task_auths",
+                params={"task_id": task_id},
+                headers=headers,
+            )
+        if resp.is_success:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
+
+
+@router.post("/tasks/{task_id}/auths")
+def create_task_auth(task_id: int, payload: Dict[str, Any], request: Request):
+    headers = _forward_auth_headers(request)
+    body = dict(payload or {})
+    body["task_id"] = task_id
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(f"{USER_SVC_BASE}/task_auths", json=body, headers=headers)
+        if resp.is_success:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
+
+
+@router.patch("/tasks/{task_id}/auths/{task_auth_id}")
+def update_task_auth(task_id: int, task_auth_id: int, payload: Dict[str, Any], request: Request):
+    headers = _forward_auth_headers(request)
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.patch(
+                f"{USER_SVC_BASE}/task_auths/{task_auth_id}",
+                json=payload,
+                headers=headers,
+            )
+        if resp.is_success:
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
+
+
+@router.delete("/tasks/{task_id}/auths/{task_auth_id}")
+def delete_task_auth(task_id: int, task_auth_id: int, request: Request):
+    headers = _forward_auth_headers(request)
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.delete(f"{USER_SVC_BASE}/task_auths/{task_auth_id}", headers=headers)
+        if resp.is_success:
+            # user-service returns {"ok": True}
+            return resp.json()
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail={"message": "user-service unavailable", "error": str(e)})
 
 @router.get("/tasks/{task_id}")
 def get_task(task_id: int, request: Request):

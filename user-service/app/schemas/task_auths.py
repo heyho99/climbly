@@ -17,3 +17,7 @@ class TaskAuthOut(BaseModel):
     last_updated_user: Optional[int]
     created_at: datetime
     updated_at: datetime
+
+
+class TaskAuthUpdate(BaseModel):
+    task_user_auth: str
