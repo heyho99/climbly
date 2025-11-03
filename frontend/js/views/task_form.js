@@ -57,9 +57,10 @@ export async function TaskFormView({ mode, id }) {
       <input type="number" name="target_time" value="${initial.target_time||0}" min="0" />
       <label>コメント</label>
       <textarea name="comment" rows="2">${escapeHtml(initial.comment||'')}</textarea>
-      <div class="row" style="margin:8px 0; gap:8px; align-items:center;">
-        <button class="btn secondary" type="button" id="equalize">均等配分</button>
-        <span style="font-size:12px;color:#666;">開始日〜終了日、目標時間に基づき計算します。必要に応じて後で編集予定。</span>
+      <div class="row" style="margin:8px 0; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button class="btn secondary" type="button" id="equalize-work">作業計画を均等配分</button>
+        <button class="btn secondary" type="button" id="equalize-time">時間計画を均等配分</button>
+        <span style="font-size:12px;color:#666;">開始日〜終了日の期間を基準に計算します。必要に応じて後で個別調整してください。</span>
       </div>
       <div id="preview" style="display:none; margin:8px 0;">
         <div style="font-weight:bold; margin-bottom:4px;">日次計画プレビュー</div>
@@ -149,44 +150,69 @@ export function setupTaskFormEvents() {
     };
   }
 
-  // 均等配分ボタン
-  const equalizeBtn = document.getElementById('equalize');
-  if (equalizeBtn) {
-    equalizeBtn.onclick = (e) => {
-      e.preventDefault();
-      const form = document.getElementById('task-form');
-      if (!form) return;
-      const { payload, start_date, end_date } = collectForm(form);
-      const errBox = document.getElementById('task-error');
-      errBox.style.display = 'none';
-      const items = buildEqualizedItems(start_date, end_date, Number(payload.target_time||0));
-      if (typeof items === 'string') {
-        // エラーメッセージを返す場合
-        errBox.textContent = items;
-        errBox.style.display = 'block';
-        return;
-      }
-      form._planItems = items; // フォームインスタンスに保持
-      renderPreview(items, Number(payload.target_time||0));
+  const form = document.getElementById('task-form');
 
-      // ECharts を初期化し、点編集結果をフォームに反映
-      const el = document.getElementById('daily-plan-chart');
-      if (el) {
-        initDailyPlanChart({
-          el,
-          items,
-          onChange(updated) {
-            form._planItems = updated;
-            // 合計表示を更新（テーブルも更新しておく）
-            renderPreview(updated, Number(payload.target_time||0));
-          }
-        });
-      }
+  function handleEqualization({ type }) {
+    if (!form) return;
+    const { payload, start_date, end_date } = collectForm(form);
+    const errBox = document.getElementById('task-error');
+    errBox.style.display = 'none';
+
+    const skeleton = buildPlanSkeleton(start_date, end_date, form._planItems || []);
+    if (typeof skeleton === 'string') {
+      errBox.textContent = skeleton;
+      errBox.style.display = 'block';
+      return;
+    }
+
+    let updated;
+    if (type === 'work') {
+      updated = equalizeWorkPlans(skeleton);
+    } else {
+      updated = equalizeTimePlans(skeleton, Number(payload.target_time || 0));
+    }
+
+    if (typeof updated === 'string') {
+      errBox.textContent = updated;
+      errBox.style.display = 'block';
+      return;
+    }
+
+    form._planItems = updated;
+    renderPreview(updated, Number(payload.target_time || 0));
+
+    const el = document.getElementById('daily-plan-chart');
+    if (el) {
+      initDailyPlanChart({
+        el,
+        items: updated,
+        onChange(next) {
+          form._planItems = next;
+          const fd2 = new FormData(form);
+          const tgt = Number(fd2.get('target_time') || 0);
+          renderPreview(next, tgt);
+        }
+      });
+    }
+  }
+
+  const equalizeWorkBtn = document.getElementById('equalize-work');
+  if (equalizeWorkBtn) {
+    equalizeWorkBtn.onclick = (e) => {
+      e.preventDefault();
+      handleEqualization({ type: 'work' });
+    };
+  }
+
+  const equalizeTimeBtn = document.getElementById('equalize-time');
+  if (equalizeTimeBtn) {
+    equalizeTimeBtn.onclick = (e) => {
+      e.preventDefault();
+      handleEqualization({ type: 'time' });
     };
   }
 
   // 編集モード時の初期化
-  const form = document.getElementById('task-form');
   if (form && form.dataset.mode === 'edit' && !form._initializedPreview) {
     const script = document.getElementById('initial-plans');
     if (script) {
@@ -217,44 +243,65 @@ export function setupTaskFormEvents() {
   }
 }
 
-// 均等配分で日次計画を作成
-function buildEqualizedItems(start_date, end_date, target_time) {
+// 均等配分のための骨組み生成
+function buildPlanSkeleton(start_date, end_date, existingItems = []) {
   if (!start_date || !end_date) return '開始日と終了日は必須です。';
   const sd = new Date(start_date);
   const ed = new Date(end_date);
-  if (isNaN(sd) || isNaN(ed)) return '日付の形式が不正です。';
+  if (Number.isNaN(sd) || Number.isNaN(ed)) return '日付の形式が不正です。';
   if (ed < sd) return '終了日は開始日以降である必要があります。';
-  if (target_time < 0) return '目標時間は0以上を指定してください。';
-  const days = Math.floor((ed - sd) / (24*3600*1000)) + 1;
+
+  const days = Math.floor((ed - sd) / (24 * 3600 * 1000)) + 1;
   if (days <= 0) return '期間が不正です。';
 
-  // 作業%は100を日数で整数割り、余りは前方に+1
+  const map = new Map(existingItems.map(it => [it.target_date, it]));
+  const skeleton = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(sd.getTime() + i * 24 * 3600 * 1000);
+    const dateStr = d.toISOString().slice(0, 10);
+    const existing = map.get(dateStr) || {};
+    skeleton.push({
+      target_date: dateStr,
+      work_plan_value: Number(existing.work_plan_value ?? 0),
+      time_plan_value: Number(existing.time_plan_value ?? 0)
+    });
+  }
+  return skeleton;
+}
+
+function equalizeWorkPlans(items) {
+  if (!Array.isArray(items) || items.length === 0) return '期間が正しく設定されていません。';
+  const days = items.length;
   const baseW = Math.floor(100 / days);
   let remW = 100 - baseW * days;
+  let cumulativeWork = 0;
+
+  return items.map(item => {
+    const extra = remW > 0 ? 1 : 0;
+    if (remW > 0) remW--;
+    cumulativeWork += baseW + extra;
+    return {
+      ...item,
+      work_plan_value: cumulativeWork,
+    };
+  });
+}
+
+function equalizeTimePlans(items, target_time) {
+  if (!Array.isArray(items) || items.length === 0) return '期間が正しく設定されていません。';
+  if (target_time < 0) return '目標時間は0以上を指定してください。';
+  const days = items.length;
   const baseT = Math.floor(target_time / days);
   let remT = target_time - baseT * days;
 
-  const items = [];
-  let cumulativeWork = 0; // 累積作業計画値
-
-  for (let i = 0; i < days; i++) {
-    const d = new Date(sd.getTime() + i * 24*3600*1000);
-    const dateStr = d.toISOString().slice(0,10);
-    
-    // 各日の作業増分を計算（余りの配分も考慮）
-    const dailyWorkIncrement = baseW + (remW > 0 ? 1 : 0);
-    if (remW > 0) remW--;
-    
-    // 累積値として設定
-    cumulativeWork += dailyWorkIncrement;
-    
-    // 時間計画値は従来通り日次値
-    const t = baseT + (remT > 0 ? 1 : 0);
+  return items.map(item => {
+    const extra = remT > 0 ? 1 : 0;
     if (remT > 0) remT--;
-    
-    items.push({ target_date: dateStr, work_plan_value: cumulativeWork, time_plan_value: t });
-  }
-  return items;
+    return {
+      ...item,
+      time_plan_value: baseT + extra,
+    };
+  });
 }
 
 function renderPreview(items, target_time) {
