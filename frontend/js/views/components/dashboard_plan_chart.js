@@ -40,13 +40,30 @@ export function initDashboardPlanChart({ el, planItems = [], recordItems = [] })
     
     // 実績データをマップに変換
     const recordMap = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     recordItems.forEach(d => {
-        recordMap[d.target_date] = Number(d.total_work_time || 0);
+        const date = new Date(d.target_date);
+        let value = Number(d.total_work_time || 0);
+        if (Number.isNaN(value)) value = 0;
+        if (date > today) {
+            recordMap[d.target_date] = null;
+        } else {
+            recordMap[d.target_date] = value;
+        }
     });
     
     // 各日付の値を取得（累積計算なし）
     const planValues = dates.map(date => planMap[date] || 0);
-    const recordValues = dates.map(date => recordMap[date] || 0);
+    const recordValues = dates.map(dateStr => {
+        const dateObj = new Date(dateStr);
+        if (dateObj > today) {
+            return null;
+        }
+        const val = Object.prototype.hasOwnProperty.call(recordMap, dateStr) ? recordMap[dateStr] : 0;
+        return val == null ? null : val;
+    });
     
     // グラフオプション
     const option = {
@@ -55,7 +72,8 @@ export function initDashboardPlanChart({ el, planItems = [], recordItems = [] })
             formatter: function(params) {
                 let result = params[0].name + '<br/>';
                 params.forEach(param => {
-                    result += param.marker + param.seriesName + ': ' + param.value + '分<br/>';
+                    const value = (param.value == null || Number.isNaN(param.value)) ? '-' : param.value;
+                    result += `${param.marker}${param.seriesName}: ${value}分<br/>`;
                 });
                 return result;
             }
@@ -134,7 +152,8 @@ export function initDashboardPlanChart({ el, planItems = [], recordItems = [] })
                 },
                 itemStyle: {
                     color: 'rgba(16, 185, 129, 1)'
-                }
+                },
+                connectNulls: false
             }
         ]
     };
