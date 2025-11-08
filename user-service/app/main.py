@@ -279,6 +279,15 @@ def _is_admin(conn, task_id: int, user_id: int) -> bool:
         return cur.fetchone() is not None
 
 
+def _has_any_task_auth(conn, task_id: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM task_auths WHERE task_id=%s LIMIT 1",
+            (task_id,),
+        )
+        return cur.fetchone() is not None
+
+
 def _count_admin(conn, task_id: int) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -335,8 +344,12 @@ def create_task_auth(req: TaskAuthIn, current_user_id: int = Depends(get_current
         raise HTTPException(status_code=400, detail={"message": "task_user_auth must be read, write, or admin"})
 
     with get_conn() as conn:
-        if not _is_admin(conn, req.task_id, current_user_id):
-            raise HTTPException(status_code=403, detail={"message": "forbidden"})
+        is_admin = _is_admin(conn, req.task_id, current_user_id)
+        if not is_admin:
+            if _has_any_task_auth(conn, req.task_id):
+                raise HTTPException(status_code=403, detail={"message": "forbidden"})
+            if req.user_id != current_user_id or req.task_user_auth != "admin":
+                raise HTTPException(status_code=403, detail={"message": "forbidden"})
         with conn.cursor() as cur:
             # ユーザー存在確認
             cur.execute("SELECT 1 FROM users WHERE user_id=%s", (req.user_id,))
