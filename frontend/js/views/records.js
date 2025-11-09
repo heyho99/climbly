@@ -118,33 +118,33 @@ export function showRecordFormModal({ mode, taskId, recordId, record = {}, onSub
   }
   
   modalRoot.innerHTML = `
-    <div class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;">
-      <div class="modal" style="background: var(--card); color: var(--text); border: 1px solid #1c2550; border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+    <div class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+      <div class="modal" style="background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; box-shadow: var(--shadow-lg);">
         <h3 style="margin-top: 0; margin-bottom: 16px; color: var(--text);">${mode === 'add' ? '実績追加' : '実績編集'}</h3>
         <form id="record-form">
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">開始日時</label>
-            <input type="datetime-local" name="start_at" value="${record.start_at ? formatDateForInput(record.start_at) : ''}" required style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
+            <input type="datetime-local" name="start_at" value="${record.start_at ? formatDateForInput(record.start_at) : ''}" required style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text);">
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">終了日時</label>
-            <input type="datetime-local" name="end_at" value="${record.end_at ? formatDateForInput(record.end_at) : ''}" required style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
+            <input type="datetime-local" name="end_at" value="${record.end_at ? formatDateForInput(record.end_at) : ''}" required style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text);">
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">進捗値</label>
-            <input type="number" name="progress_value" value="${record.progress_value || ''}" min="0" step="0.1" style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
+            <input type="number" name="progress_value" value="${record.progress_value || ''}" min="0" step="0.1" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text);">
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">作業時間（分）</label>
-            <input type="number" name="work_time" value="${record.work_time || ''}" min="0" style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; background: #0b1230; color: var(--text);">
+            <input type="number" name="work_time" value="${record.work_time || ''}" min="0" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text);">
           </div>
           <div style="margin-bottom: 16px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--text);">メモ</label>
-            <textarea name="note" rows="3" style="width: 100%; padding: 8px; border: 1px solid #273061; border-radius: 4px; resize: vertical; background: #0b1230; color: var(--text);">${record.note || ''}</textarea>
+            <textarea name="note" rows="3" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; resize: vertical; background: var(--card); color: var(--text);">${record.note || ''}</textarea>
           </div>
           <div style="display: flex; gap: 8px; justify-content: flex-end;">
-            <button type="button" id="cancel-btn" style="padding: 8px 16px; border: 1px solid #273061; background: #273061; color: var(--text); border-radius: 4px; cursor: pointer;">キャンセル</button>
-            <button type="submit" style="padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;">${mode === 'add' ? '追加' : '保存'}</button>
+            <button type="button" id="cancel-btn" class="btn secondary" style="min-width: 96px;">キャンセル</button>
+            <button type="submit" class="btn" style="min-width: 96px;">${mode === 'add' ? '追加' : '保存'}</button>
           </div>
         </form>
       </div>
